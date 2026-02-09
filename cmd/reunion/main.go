@@ -29,8 +29,28 @@ var rootCmd = &cobra.Command{
 	Long:  "A CLI for parsing and exploring Reunion 14 genealogy bundles (.familyfile14).",
 }
 
-// persistentPreRunLoad is a helper that loads the bundle from args[0].
-// Commands that need the bundle set this as their PersistentPreRunE.
+func init() {
+	rootCmd.PersistentFlags().BoolP("json", "j", false, "Output as JSON")
+
+	rootCmd.AddCommand(jsonCmd)
+	rootCmd.AddCommand(statsCmd)
+	rootCmd.AddCommand(personsCmd)
+	rootCmd.AddCommand(personCmd)
+	rootCmd.AddCommand(couplesCmd)
+	rootCmd.AddCommand(placesCmd)
+	rootCmd.AddCommand(eventsCmd)
+	rootCmd.AddCommand(searchCmd)
+	rootCmd.AddCommand(ancestorsCmd)
+	rootCmd.AddCommand(descendantsCmd)
+	rootCmd.AddCommand(summaryCmd)
+	rootCmd.AddCommand(treetopsCmd)
+}
+
+func jsonFlag(cmd *cobra.Command) bool {
+	v, _ := cmd.Flags().GetBool("json")
+	return v
+}
+
 func loadBundleFromArgs(cmd *cobra.Command, args []string) error {
 	path := args[0]
 	var err error
@@ -53,21 +73,6 @@ func parseIDArg(args []string, pos int) (uint32, error) {
 	return uint32(n), nil
 }
 
-func init() {
-	rootCmd.AddCommand(jsonCmd)
-	rootCmd.AddCommand(statsCmd)
-	rootCmd.AddCommand(personsCmd)
-	rootCmd.AddCommand(personCmd)
-	rootCmd.AddCommand(couplesCmd)
-	rootCmd.AddCommand(placesCmd)
-	rootCmd.AddCommand(eventsCmd)
-	rootCmd.AddCommand(searchCmd)
-	rootCmd.AddCommand(ancestorsCmd)
-	rootCmd.AddCommand(descendantsCmd)
-	rootCmd.AddCommand(summaryCmd)
-	rootCmd.AddCommand(treetopsCmd)
-}
-
 // --- json ---
 
 var jsonCmd = &cobra.Command{
@@ -88,8 +93,7 @@ var statsCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	PreRunE: loadBundleFromArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cmdStats(ff, idx)
-		return nil
+		return cmdStats(ff, idx, jsonFlag(cmd))
 	},
 }
 
@@ -102,8 +106,7 @@ var personsCmd = &cobra.Command{
 	PreRunE: loadBundleFromArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		surname, _ := cmd.Flags().GetString("surname")
-		cmdPersons(ff, idx, surname)
-		return nil
+		return cmdPersons(ff, idx, surname, jsonFlag(cmd))
 	},
 }
 
@@ -123,13 +126,8 @@ var personCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		asJSON, _ := cmd.Flags().GetBool("json")
-		return cmdPerson(ff, idx, id, asJSON)
+		return cmdPerson(ff, idx, id, jsonFlag(cmd))
 	},
-}
-
-func init() {
-	personCmd.Flags().Bool("json", false, "Output as JSON")
 }
 
 // --- couples ---
@@ -140,8 +138,7 @@ var couplesCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	PreRunE: loadBundleFromArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cmdCouples(ff, idx)
-		return nil
+		return cmdCouples(ff, idx, jsonFlag(cmd))
 	},
 }
 
@@ -153,8 +150,7 @@ var placesCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	PreRunE: loadBundleFromArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cmdPlaces(ff)
-		return nil
+		return cmdPlaces(ff, jsonFlag(cmd))
 	},
 }
 
@@ -166,8 +162,7 @@ var eventsCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	PreRunE: loadBundleFromArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cmdEvents(ff)
-		return nil
+		return cmdEvents(ff, jsonFlag(cmd))
 	},
 }
 
@@ -179,8 +174,7 @@ var searchCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	PreRunE: loadBundleFromArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cmdSearch(ff, args[1])
-		return nil
+		return cmdSearch(ff, args[1], jsonFlag(cmd))
 	},
 }
 
@@ -197,7 +191,7 @@ var ancestorsCmd = &cobra.Command{
 			return err
 		}
 		gen, _ := cmd.Flags().GetInt("generations")
-		return cmdAncestors(idx, id, gen)
+		return cmdAncestors(idx, id, gen, jsonFlag(cmd))
 	},
 }
 
@@ -218,7 +212,7 @@ var descendantsCmd = &cobra.Command{
 			return err
 		}
 		gen, _ := cmd.Flags().GetInt("generations")
-		return cmdDescendants(idx, id, gen)
+		return cmdDescendants(idx, id, gen, jsonFlag(cmd))
 	},
 }
 
@@ -238,13 +232,8 @@ var summaryCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		asJSON, _ := cmd.Flags().GetBool("json")
-		return cmdSummary(idx, id, asJSON)
+		return cmdSummary(idx, id, jsonFlag(cmd))
 	},
-}
-
-func init() {
-	summaryCmd.Flags().Bool("json", false, "Output as JSON")
 }
 
 // --- treetops ---
@@ -259,6 +248,6 @@ var treetopsCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return cmdTreetops(idx, id)
+		return cmdTreetops(idx, id, jsonFlag(cmd))
 	},
 }

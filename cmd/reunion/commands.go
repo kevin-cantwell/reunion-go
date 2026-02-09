@@ -10,17 +10,29 @@ import (
 	"github.com/kevin-cantwell/reunion-go/model"
 )
 
-func cmdJSON(ff *model.FamilyFile) error {
-	data, err := ff.ToJSON()
+// printJSON marshals v as indented JSON to stdout.
+func printJSON(v interface{}) error {
+	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return fmt.Errorf("serializing JSON: %w", err)
 	}
-	os.Stdout.Write(data)
+	_, err = os.Stdout.Write(data)
+	if err != nil {
+		return err
+	}
 	fmt.Println()
 	return nil
 }
 
-func cmdStats(ff *model.FamilyFile, idx *Index) {
+// --- json ---
+
+func cmdJSON(ff *model.FamilyFile) error {
+	return printJSON(ff)
+}
+
+// --- stats ---
+
+func cmdStats(ff *model.FamilyFile, idx *Index, asJSON bool) error {
 	male, female, unknown := 0, 0, 0
 	named := 0
 	for _, p := range ff.Persons {
@@ -48,6 +60,24 @@ func cmdStats(ff *model.FamilyFile, idx *Index) {
 		}
 	}
 
+	if asJSON {
+		return printJSON(map[string]interface{}{
+			"persons":        len(ff.Persons),
+			"persons_named":  named,
+			"persons_male":   male,
+			"persons_female": female,
+			"persons_unknown_sex": unknown,
+			"families":            len(ff.Families),
+			"families_with_partners": withPartners,
+			"families_with_children": withChildren,
+			"places":       len(ff.Places),
+			"event_types":  len(ff.EventDefinitions),
+			"sources":      len(ff.Sources),
+			"notes":        len(ff.Notes),
+			"media":        len(ff.MediaRefs),
+		})
+	}
+
 	fmt.Printf("Persons:          %d\n", len(ff.Persons))
 	fmt.Printf("  Named:          %d\n", named)
 	fmt.Printf("  Male:           %d\n", male)
@@ -61,16 +91,32 @@ func cmdStats(ff *model.FamilyFile, idx *Index) {
 	fmt.Printf("Sources:          %d\n", len(ff.Sources))
 	fmt.Printf("Notes:            %d\n", len(ff.Notes))
 	fmt.Printf("Media:            %d\n", len(ff.MediaRefs))
+	return nil
 }
 
-func cmdPersons(ff *model.FamilyFile, idx *Index, surname string) {
+// --- persons ---
+
+func cmdPersons(ff *model.FamilyFile, idx *Index, surname string, asJSON bool) error {
+	var filtered []model.Person
 	for _, p := range ff.Persons {
 		if surname != "" && !strings.EqualFold(p.Surname, surname) {
 			continue
 		}
-		fmt.Printf("#%-6d %s  %s\n", p.ID, p.Sex, FormatName(&p))
+		filtered = append(filtered, p)
 	}
+
+	if asJSON {
+		return printJSON(filtered)
+	}
+
+	for i := range filtered {
+		p := &filtered[i]
+		fmt.Printf("#%-6d %s  %s\n", p.ID, p.Sex, FormatName(p))
+	}
+	return nil
 }
+
+// --- person ---
 
 func cmdPerson(ff *model.FamilyFile, idx *Index, id uint32, asJSON bool) error {
 	p, ok := idx.Persons[id]
@@ -79,9 +125,7 @@ func cmdPerson(ff *model.FamilyFile, idx *Index, id uint32, asJSON bool) error {
 	}
 
 	if asJSON {
-		data, _ := json.MarshalIndent(p, "", "  ")
-		fmt.Println(string(data))
-		return nil
+		return printJSON(p)
 	}
 
 	fmt.Printf("Person #%d: %s\n", p.ID, FormatName(p))
@@ -105,7 +149,6 @@ func cmdPerson(ff *model.FamilyFile, idx *Index, id uint32, asJSON bool) error {
 		}
 	}
 
-	// Spouses
 	spouses := idx.Spouses(p.ID)
 	if len(spouses) > 0 {
 		fmt.Println("\nSpouses:")
@@ -114,7 +157,6 @@ func cmdPerson(ff *model.FamilyFile, idx *Index, id uint32, asJSON bool) error {
 		}
 	}
 
-	// Children
 	children := idx.ChildrenOf(p.ID)
 	if len(children) > 0 {
 		fmt.Println("\nChildren:")
@@ -123,7 +165,6 @@ func cmdPerson(ff *model.FamilyFile, idx *Index, id uint32, asJSON bool) error {
 		}
 	}
 
-	// Parents
 	parents := idx.Parents(p.ID)
 	if len(parents) > 0 {
 		fmt.Println("\nParents:")
@@ -132,7 +173,6 @@ func cmdPerson(ff *model.FamilyFile, idx *Index, id uint32, asJSON bool) error {
 		}
 	}
 
-	// Siblings
 	siblings := idx.Siblings(p.ID)
 	if len(siblings) > 0 {
 		fmt.Println("\nSiblings:")
@@ -144,11 +184,22 @@ func cmdPerson(ff *model.FamilyFile, idx *Index, id uint32, asJSON bool) error {
 	return nil
 }
 
-func cmdCouples(ff *model.FamilyFile, idx *Index) {
+// --- couples ---
+
+func cmdCouples(ff *model.FamilyFile, idx *Index, asJSON bool) error {
+	var couples []model.Family
 	for _, f := range ff.Families {
 		if f.Partner1 == 0 && f.Partner2 == 0 {
 			continue
 		}
+		couples = append(couples, f)
+	}
+
+	if asJSON {
+		return printJSON(couples)
+	}
+
+	for _, f := range couples {
 		name1 := idx.PersonName(f.Partner1)
 		name2 := idx.PersonName(f.Partner2)
 		if f.Partner2 == 0 {
@@ -163,15 +214,27 @@ func cmdCouples(ff *model.FamilyFile, idx *Index) {
 		}
 		fmt.Println()
 	}
+	return nil
 }
 
-func cmdPlaces(ff *model.FamilyFile) {
+// --- places ---
+
+func cmdPlaces(ff *model.FamilyFile, asJSON bool) error {
+	if asJSON {
+		return printJSON(ff.Places)
+	}
 	for _, p := range ff.Places {
 		fmt.Printf("#%-6d %s\n", p.ID, p.Name)
 	}
+	return nil
 }
 
-func cmdEvents(ff *model.FamilyFile) {
+// --- events ---
+
+func cmdEvents(ff *model.FamilyFile, asJSON bool) error {
+	if asJSON {
+		return printJSON(ff.EventDefinitions)
+	}
 	for _, e := range ff.EventDefinitions {
 		gedcom := ""
 		if e.GEDCOMCode != "" {
@@ -179,27 +242,73 @@ func cmdEvents(ff *model.FamilyFile) {
 		}
 		fmt.Printf("#%-6d %s%s\n", e.ID, e.DisplayName, gedcom)
 	}
+	return nil
 }
 
-func cmdSearch(ff *model.FamilyFile, query string) {
+// --- search ---
+
+func cmdSearch(ff *model.FamilyFile, query string, asJSON bool) error {
 	q := strings.ToLower(query)
+	var matches []model.Person
 	for _, p := range ff.Persons {
 		name := strings.ToLower(FormatName(&p))
 		if strings.Contains(name, q) {
-			fmt.Printf("#%-6d %s  %s\n", p.ID, p.Sex, FormatName(&p))
+			matches = append(matches, p)
 		}
 	}
+
+	if asJSON {
+		return printJSON(matches)
+	}
+
+	for i := range matches {
+		p := &matches[i]
+		fmt.Printf("#%-6d %s  %s\n", p.ID, p.Sex, FormatName(p))
+	}
+	return nil
 }
 
-func cmdAncestors(idx *Index, id uint32, maxGen int) error {
+// --- ancestors ---
+
+// treeEntry pairs a person record with their generation depth for JSON output.
+type treeEntry struct {
+	Generation int           `json:"generation"`
+	Person     *model.Person `json:"person"`
+}
+
+func cmdAncestors(idx *Index, id uint32, maxGen int, asJSON bool) error {
 	p, ok := idx.Persons[id]
 	if !ok {
 		return fmt.Errorf("person %d not found", id)
 	}
+
+	if asJSON {
+		var entries []treeEntry
+		visited := make(map[uint32]bool)
+		collectAncestors(idx, id, 0, maxGen, visited, &entries)
+		return printJSON(entries)
+	}
+
 	fmt.Printf("Ancestors of #%d %s:\n", p.ID, FormatName(p))
 	visited := make(map[uint32]bool)
 	walkAncestors(idx, id, 0, maxGen, visited, "")
 	return nil
+}
+
+func collectAncestors(idx *Index, id uint32, gen, maxGen int, visited map[uint32]bool, out *[]treeEntry) {
+	if gen > maxGen || visited[id] {
+		return
+	}
+	visited[id] = true
+
+	for _, pid := range idx.Parents(id) {
+		p, ok := idx.Persons[pid]
+		if !ok {
+			continue
+		}
+		*out = append(*out, treeEntry{Generation: gen + 1, Person: p})
+		collectAncestors(idx, pid, gen+1, maxGen, visited, out)
+	}
 }
 
 func walkAncestors(idx *Index, id uint32, gen, maxGen int, visited map[uint32]bool, prefix string) {
@@ -208,8 +317,7 @@ func walkAncestors(idx *Index, id uint32, gen, maxGen int, visited map[uint32]bo
 	}
 	visited[id] = true
 
-	parents := idx.Parents(id)
-	for _, pid := range parents {
+	for _, pid := range idx.Parents(id) {
 		p, ok := idx.Persons[pid]
 		if !ok {
 			continue
@@ -219,15 +327,41 @@ func walkAncestors(idx *Index, id uint32, gen, maxGen int, visited map[uint32]bo
 	}
 }
 
-func cmdDescendants(idx *Index, id uint32, maxGen int) error {
+// --- descendants ---
+
+func cmdDescendants(idx *Index, id uint32, maxGen int, asJSON bool) error {
 	p, ok := idx.Persons[id]
 	if !ok {
 		return fmt.Errorf("person %d not found", id)
 	}
+
+	if asJSON {
+		var entries []treeEntry
+		visited := make(map[uint32]bool)
+		collectDescendants(idx, id, 0, maxGen, visited, &entries)
+		return printJSON(entries)
+	}
+
 	fmt.Printf("Descendants of #%d %s:\n", p.ID, FormatName(p))
 	visited := make(map[uint32]bool)
 	walkDescendants(idx, id, 0, maxGen, visited, "")
 	return nil
+}
+
+func collectDescendants(idx *Index, id uint32, gen, maxGen int, visited map[uint32]bool, out *[]treeEntry) {
+	if gen > maxGen || visited[id] {
+		return
+	}
+	visited[id] = true
+
+	for _, cid := range idx.ChildrenOf(id) {
+		c, ok := idx.Persons[cid]
+		if !ok {
+			continue
+		}
+		*out = append(*out, treeEntry{Generation: gen + 1, Person: c})
+		collectDescendants(idx, cid, gen+1, maxGen, visited, out)
+	}
 }
 
 func walkDescendants(idx *Index, id uint32, gen, maxGen int, visited map[uint32]bool, prefix string) {
@@ -236,8 +370,7 @@ func walkDescendants(idx *Index, id uint32, gen, maxGen int, visited map[uint32]
 	}
 	visited[id] = true
 
-	children := idx.ChildrenOf(id)
-	for _, cid := range children {
+	for _, cid := range idx.ChildrenOf(id) {
 		c, ok := idx.Persons[cid]
 		if !ok {
 			continue
@@ -247,21 +380,33 @@ func walkDescendants(idx *Index, id uint32, gen, maxGen int, visited map[uint32]
 	}
 }
 
-func cmdTreetops(idx *Index, id uint32) error {
+// --- treetops ---
+
+func cmdTreetops(idx *Index, id uint32, asJSON bool) error {
 	p, ok := idx.Persons[id]
 	if !ok {
 		return fmt.Errorf("person %d not found", id)
 	}
-	fmt.Printf("Treetops (terminal ancestors) of #%d %s:\n", p.ID, FormatName(p))
 
 	visited := make(map[uint32]bool)
-	var treetops []uint32
-	findTreetops(idx, id, visited, &treetops)
+	var treetopIDs []uint32
+	findTreetops(idx, id, visited, &treetopIDs)
 
-	for _, tid := range treetops {
+	if asJSON {
+		var persons []*model.Person
+		for _, tid := range treetopIDs {
+			if tp, ok := idx.Persons[tid]; ok {
+				persons = append(persons, tp)
+			}
+		}
+		return printJSON(persons)
+	}
+
+	fmt.Printf("Treetops (terminal ancestors) of #%d %s:\n", p.ID, FormatName(p))
+	for _, tid := range treetopIDs {
 		fmt.Printf("  #%d %s\n", tid, idx.PersonName(tid))
 	}
-	fmt.Printf("\nTotal treetops: %d\n", len(treetops))
+	fmt.Printf("\nTotal treetops: %d\n", len(treetopIDs))
 	return nil
 }
 
@@ -281,6 +426,8 @@ func findTreetops(idx *Index, id uint32, visited map[uint32]bool, treetops *[]ui
 	}
 }
 
+// --- summary ---
+
 func cmdSummary(idx *Index, id uint32, asJSON bool) error {
 	p, ok := idx.Persons[id]
 	if !ok {
@@ -290,24 +437,20 @@ func cmdSummary(idx *Index, id uint32, asJSON bool) error {
 	spouses := idx.Spouses(p.ID)
 	siblings := idx.Siblings(p.ID)
 
-	// Count ancestors
 	ancestorVisited := make(map[uint32]bool)
 	countAncestors(idx, p.ID, ancestorVisited)
 	delete(ancestorVisited, p.ID)
 	ancestorCount := len(ancestorVisited)
 
-	// Count descendants
 	descendantVisited := make(map[uint32]bool)
 	countDescendants(idx, p.ID, descendantVisited)
 	delete(descendantVisited, p.ID)
 	descendantCount := len(descendantVisited)
 
-	// Find treetops
 	treetopVisited := make(map[uint32]bool)
 	var treetops []uint32
 	findTreetops(idx, p.ID, treetopVisited, &treetops)
 
-	// Surname counts among ancestors
 	surnameCounts := make(map[string]int)
 	for aid := range ancestorVisited {
 		a, ok := idx.Persons[aid]
@@ -317,7 +460,7 @@ func cmdSummary(idx *Index, id uint32, asJSON bool) error {
 	}
 
 	if asJSON {
-		summary := map[string]interface{}{
+		return printJSON(map[string]interface{}{
 			"person":      FormatName(p),
 			"id":          p.ID,
 			"spouses":     len(spouses),
@@ -326,10 +469,7 @@ func cmdSummary(idx *Index, id uint32, asJSON bool) error {
 			"descendants": descendantCount,
 			"treetops":    len(treetops),
 			"surnames":    surnameCounts,
-		}
-		data, _ := json.MarshalIndent(summary, "", "  ")
-		fmt.Println(string(data))
-		return nil
+		})
 	}
 
 	fmt.Printf("Summary for #%d %s\n", p.ID, FormatName(p))
