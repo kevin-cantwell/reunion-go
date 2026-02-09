@@ -10,14 +10,14 @@ import (
 	"github.com/kevin-cantwell/reunion-go/model"
 )
 
-func cmdJSON(ff *model.FamilyFile) {
+func cmdJSON(ff *model.FamilyFile) error {
 	data, err := ff.ToJSON()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("serializing JSON: %w", err)
 	}
 	os.Stdout.Write(data)
 	fmt.Println()
+	return nil
 }
 
 func cmdStats(ff *model.FamilyFile, idx *Index) {
@@ -72,17 +72,16 @@ func cmdPersons(ff *model.FamilyFile, idx *Index, surname string) {
 	}
 }
 
-func cmdPerson(ff *model.FamilyFile, idx *Index, id uint32, asJSON bool) {
+func cmdPerson(ff *model.FamilyFile, idx *Index, id uint32, asJSON bool) error {
 	p, ok := idx.Persons[id]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "person %d not found\n", id)
-		os.Exit(1)
+		return fmt.Errorf("person %d not found", id)
 	}
 
 	if asJSON {
 		data, _ := json.MarshalIndent(p, "", "  ")
 		fmt.Println(string(data))
-		return
+		return nil
 	}
 
 	fmt.Printf("Person #%d: %s\n", p.ID, FormatName(p))
@@ -141,6 +140,8 @@ func cmdPerson(ff *model.FamilyFile, idx *Index, id uint32, asJSON bool) {
 			fmt.Printf("  - #%d %s\n", sid, idx.PersonName(sid))
 		}
 	}
+
+	return nil
 }
 
 func cmdCouples(ff *model.FamilyFile, idx *Index) {
@@ -190,15 +191,15 @@ func cmdSearch(ff *model.FamilyFile, query string) {
 	}
 }
 
-func cmdAncestors(idx *Index, id uint32, maxGen int) {
+func cmdAncestors(idx *Index, id uint32, maxGen int) error {
 	p, ok := idx.Persons[id]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "person %d not found\n", id)
-		os.Exit(1)
+		return fmt.Errorf("person %d not found", id)
 	}
 	fmt.Printf("Ancestors of #%d %s:\n", p.ID, FormatName(p))
 	visited := make(map[uint32]bool)
 	walkAncestors(idx, id, 0, maxGen, visited, "")
+	return nil
 }
 
 func walkAncestors(idx *Index, id uint32, gen, maxGen int, visited map[uint32]bool, prefix string) {
@@ -218,15 +219,15 @@ func walkAncestors(idx *Index, id uint32, gen, maxGen int, visited map[uint32]bo
 	}
 }
 
-func cmdDescendants(idx *Index, id uint32, maxGen int) {
+func cmdDescendants(idx *Index, id uint32, maxGen int) error {
 	p, ok := idx.Persons[id]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "person %d not found\n", id)
-		os.Exit(1)
+		return fmt.Errorf("person %d not found", id)
 	}
 	fmt.Printf("Descendants of #%d %s:\n", p.ID, FormatName(p))
 	visited := make(map[uint32]bool)
 	walkDescendants(idx, id, 0, maxGen, visited, "")
+	return nil
 }
 
 func walkDescendants(idx *Index, id uint32, gen, maxGen int, visited map[uint32]bool, prefix string) {
@@ -246,11 +247,10 @@ func walkDescendants(idx *Index, id uint32, gen, maxGen int, visited map[uint32]
 	}
 }
 
-func cmdTreetops(idx *Index, id uint32) {
+func cmdTreetops(idx *Index, id uint32) error {
 	p, ok := idx.Persons[id]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "person %d not found\n", id)
-		os.Exit(1)
+		return fmt.Errorf("person %d not found", id)
 	}
 	fmt.Printf("Treetops (terminal ancestors) of #%d %s:\n", p.ID, FormatName(p))
 
@@ -262,6 +262,7 @@ func cmdTreetops(idx *Index, id uint32) {
 		fmt.Printf("  #%d %s\n", tid, idx.PersonName(tid))
 	}
 	fmt.Printf("\nTotal treetops: %d\n", len(treetops))
+	return nil
 }
 
 func findTreetops(idx *Index, id uint32, visited map[uint32]bool, treetops *[]uint32) {
@@ -280,11 +281,10 @@ func findTreetops(idx *Index, id uint32, visited map[uint32]bool, treetops *[]ui
 	}
 }
 
-func cmdSummary(idx *Index, id uint32, asJSON bool) {
+func cmdSummary(idx *Index, id uint32, asJSON bool) error {
 	p, ok := idx.Persons[id]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "person %d not found\n", id)
-		os.Exit(1)
+		return fmt.Errorf("person %d not found", id)
 	}
 
 	spouses := idx.Spouses(p.ID)
@@ -329,7 +329,7 @@ func cmdSummary(idx *Index, id uint32, asJSON bool) {
 		}
 		data, _ := json.MarshalIndent(summary, "", "  ")
 		fmt.Println(string(data))
-		return
+		return nil
 	}
 
 	fmt.Printf("Summary for #%d %s\n", p.ID, FormatName(p))
@@ -356,6 +356,7 @@ func cmdSummary(idx *Index, id uint32, asJSON bool) {
 			fmt.Printf("    %-20s %d\n", s.k, s.v)
 		}
 	}
+	return nil
 }
 
 func countAncestors(idx *Index, id uint32, visited map[uint32]bool) {

@@ -1,138 +1,264 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"strconv"
+
+	"github.com/spf13/cobra"
 
 	reunion "github.com/kevin-cantwell/reunion-go"
 	"github.com/kevin-cantwell/reunion-go/model"
 	_ "github.com/kevin-cantwell/reunion-go/parser" // register v14 parser
 )
 
-const usage = `Usage: reunion <command> <bundle> [options]
-
-Commands:
-  json                  Dump full FamilyFile as JSON
-  stats                 Summary counts (persons, families, places, etc.)
-  persons               List all persons (--surname to filter)
-  person <id>           Detail view for a person (--json for JSON)
-  couples               List all couples
-  places                List all places
-  events                List all event type definitions
-  search <query>        Search person names
-  ancestors <id>        Walk ancestor tree (--generations N)
-  descendants <id>      Walk descendant tree (--generations N)
-  summary <id>          Per-person stats (--json for JSON)
-  treetops <id>         List terminal ancestors
-`
+var (
+	ff  *model.FamilyFile
+	idx *Index
+)
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprint(os.Stderr, usage)
+	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
+}
 
-	cmd := os.Args[1]
-	if cmd == "help" || cmd == "-h" || cmd == "--help" {
-		fmt.Print(usage)
-		return
+var rootCmd = &cobra.Command{
+	Use:   "reunion <command> <bundle>",
+	Short: "Explore Reunion 14 family files",
+	Long:  "A CLI for parsing and exploring Reunion 14 genealogy bundles (.familyfile14).",
+}
+
+// persistentPreRunLoad is a helper that loads the bundle from args[0].
+// Commands that need the bundle set this as their PersistentPreRunE.
+func loadBundleFromArgs(cmd *cobra.Command, args []string) error {
+	path := args[0]
+	var err error
+	ff, err = reunion.Open(path, nil)
+	if err != nil {
+		return fmt.Errorf("opening bundle: %w", err)
 	}
+	idx = BuildIndex(ff)
+	return nil
+}
 
-	// Commands that need a bundle path
-	if len(os.Args) < 3 {
-		fmt.Fprintf(os.Stderr, "error: missing bundle path\n\n%s", usage)
-		os.Exit(1)
+func parseIDArg(args []string, pos int) (uint32, error) {
+	if pos >= len(args) {
+		return 0, fmt.Errorf("missing person ID argument")
 	}
-	bundlePath := os.Args[2]
+	n, err := strconv.ParseUint(args[pos], 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("invalid ID %q: %w", args[pos], err)
+	}
+	return uint32(n), nil
+}
 
-	// Parse remaining flags
-	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
-	surname := fs.String("surname", "", "Filter by surname")
-	generations := fs.Int("generations", 10, "Max generation depth")
-	asJSON := fs.Bool("json", false, "Output as JSON")
+func init() {
+	rootCmd.AddCommand(jsonCmd)
+	rootCmd.AddCommand(statsCmd)
+	rootCmd.AddCommand(personsCmd)
+	rootCmd.AddCommand(personCmd)
+	rootCmd.AddCommand(couplesCmd)
+	rootCmd.AddCommand(placesCmd)
+	rootCmd.AddCommand(eventsCmd)
+	rootCmd.AddCommand(searchCmd)
+	rootCmd.AddCommand(ancestorsCmd)
+	rootCmd.AddCommand(descendantsCmd)
+	rootCmd.AddCommand(summaryCmd)
+	rootCmd.AddCommand(treetopsCmd)
+}
 
-	// Determine where extra args start
-	extraArgs := os.Args[3:]
-	fs.Parse(extraArgs)
+// --- json ---
 
-	// Load bundle
-	ff, idx := loadBundle(bundlePath)
+var jsonCmd = &cobra.Command{
+	Use:   "json <bundle>",
+	Short: "Dump full FamilyFile as JSON",
+	Args:  cobra.ExactArgs(1),
+	PreRunE: loadBundleFromArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmdJSON(ff)
+	},
+}
 
-	switch cmd {
-	case "json":
-		cmdJSON(ff)
+// --- stats ---
 
-	case "stats":
+var statsCmd = &cobra.Command{
+	Use:   "stats <bundle>",
+	Short: "Summary counts (persons, families, places, etc.)",
+	Args:  cobra.ExactArgs(1),
+	PreRunE: loadBundleFromArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
 		cmdStats(ff, idx)
+		return nil
+	},
+}
 
-	case "persons":
-		cmdPersons(ff, idx, *surname)
+// --- persons ---
 
-	case "person":
-		id := requireIDArg(fs, "person")
-		cmdPerson(ff, idx, id, *asJSON)
+var personsCmd = &cobra.Command{
+	Use:   "persons <bundle>",
+	Short: "List all persons",
+	Args:  cobra.ExactArgs(1),
+	PreRunE: loadBundleFromArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		surname, _ := cmd.Flags().GetString("surname")
+		cmdPersons(ff, idx, surname)
+		return nil
+	},
+}
 
-	case "couples":
-		cmdCouples(ff, idx)
+func init() {
+	personsCmd.Flags().String("surname", "", "Filter by surname")
+}
 
-	case "places":
-		cmdPlaces(ff)
+// --- person ---
 
-	case "events":
-		cmdEvents(ff)
-
-	case "search":
-		query := fs.Arg(0)
-		if query == "" {
-			fmt.Fprintf(os.Stderr, "error: search requires a query\n")
-			os.Exit(1)
+var personCmd = &cobra.Command{
+	Use:   "person <bundle> <id>",
+	Short: "Detail view for a person",
+	Args:  cobra.ExactArgs(2),
+	PreRunE: loadBundleFromArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := parseIDArg(args, 1)
+		if err != nil {
+			return err
 		}
-		cmdSearch(ff, query)
-
-	case "ancestors":
-		id := requireIDArg(fs, "ancestors")
-		cmdAncestors(idx, id, *generations)
-
-	case "descendants":
-		id := requireIDArg(fs, "descendants")
-		cmdDescendants(idx, id, *generations)
-
-	case "summary":
-		id := requireIDArg(fs, "summary")
-		cmdSummary(idx, id, *asJSON)
-
-	case "treetops":
-		id := requireIDArg(fs, "treetops")
-		cmdTreetops(idx, id)
-
-	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n%s", cmd, usage)
-		os.Exit(1)
-	}
+		asJSON, _ := cmd.Flags().GetBool("json")
+		return cmdPerson(ff, idx, id, asJSON)
+	},
 }
 
-func loadBundle(path string) (*model.FamilyFile, *Index) {
-	ff, err := reunion.Open(path, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error opening bundle: %v\n", err)
-		os.Exit(1)
-	}
-	idx := BuildIndex(ff)
-	return ff, idx
+func init() {
+	personCmd.Flags().Bool("json", false, "Output as JSON")
 }
 
-func requireIDArg(fs *flag.FlagSet, cmd string) uint32 {
-	arg := fs.Arg(0)
-	if arg == "" {
-		fmt.Fprintf(os.Stderr, "error: %s requires a person ID\n", cmd)
-		os.Exit(1)
-	}
-	n, err := strconv.ParseUint(arg, 10, 32)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: invalid ID %q\n", arg)
-		os.Exit(1)
-	}
-	return uint32(n)
+// --- couples ---
+
+var couplesCmd = &cobra.Command{
+	Use:   "couples <bundle>",
+	Short: "List all couples",
+	Args:  cobra.ExactArgs(1),
+	PreRunE: loadBundleFromArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cmdCouples(ff, idx)
+		return nil
+	},
+}
+
+// --- places ---
+
+var placesCmd = &cobra.Command{
+	Use:   "places <bundle>",
+	Short: "List all places",
+	Args:  cobra.ExactArgs(1),
+	PreRunE: loadBundleFromArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cmdPlaces(ff)
+		return nil
+	},
+}
+
+// --- events ---
+
+var eventsCmd = &cobra.Command{
+	Use:   "events <bundle>",
+	Short: "List all event type definitions",
+	Args:  cobra.ExactArgs(1),
+	PreRunE: loadBundleFromArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cmdEvents(ff)
+		return nil
+	},
+}
+
+// --- search ---
+
+var searchCmd = &cobra.Command{
+	Use:   "search <bundle> <query>",
+	Short: "Search person names",
+	Args:  cobra.ExactArgs(2),
+	PreRunE: loadBundleFromArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cmdSearch(ff, args[1])
+		return nil
+	},
+}
+
+// --- ancestors ---
+
+var ancestorsCmd = &cobra.Command{
+	Use:   "ancestors <bundle> <id>",
+	Short: "Walk ancestor tree",
+	Args:  cobra.ExactArgs(2),
+	PreRunE: loadBundleFromArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := parseIDArg(args, 1)
+		if err != nil {
+			return err
+		}
+		gen, _ := cmd.Flags().GetInt("generations")
+		return cmdAncestors(idx, id, gen)
+	},
+}
+
+func init() {
+	ancestorsCmd.Flags().IntP("generations", "g", 10, "Max generation depth")
+}
+
+// --- descendants ---
+
+var descendantsCmd = &cobra.Command{
+	Use:   "descendants <bundle> <id>",
+	Short: "Walk descendant tree",
+	Args:  cobra.ExactArgs(2),
+	PreRunE: loadBundleFromArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := parseIDArg(args, 1)
+		if err != nil {
+			return err
+		}
+		gen, _ := cmd.Flags().GetInt("generations")
+		return cmdDescendants(idx, id, gen)
+	},
+}
+
+func init() {
+	descendantsCmd.Flags().IntP("generations", "g", 10, "Max generation depth")
+}
+
+// --- summary ---
+
+var summaryCmd = &cobra.Command{
+	Use:   "summary <bundle> <id>",
+	Short: "Per-person stats (spouses, ancestors, descendants, treetops, surnames)",
+	Args:  cobra.ExactArgs(2),
+	PreRunE: loadBundleFromArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := parseIDArg(args, 1)
+		if err != nil {
+			return err
+		}
+		asJSON, _ := cmd.Flags().GetBool("json")
+		return cmdSummary(idx, id, asJSON)
+	},
+}
+
+func init() {
+	summaryCmd.Flags().Bool("json", false, "Output as JSON")
+}
+
+// --- treetops ---
+
+var treetopsCmd = &cobra.Command{
+	Use:   "treetops <bundle> <id>",
+	Short: "List terminal ancestors (persons with no parents)",
+	Args:  cobra.ExactArgs(2),
+	PreRunE: loadBundleFromArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := parseIDArg(args, 1)
+		if err != nil {
+			return err
+		}
+		return cmdTreetops(idx, id)
+	},
 }
