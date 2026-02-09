@@ -36,6 +36,7 @@ type Person struct {
 type PersonEvent struct {
 	Tag       uint16 `json:"tag"`
 	TypeCode  uint16 `json:"type_code,omitempty"`
+	SchemaID  uint16 `json:"schema_id,omitempty"`
 	PlaceRefs []int  `json:"place_refs,omitempty"`
 	Date      string `json:"date,omitempty"`
 	RawData   []byte `json:"-"`

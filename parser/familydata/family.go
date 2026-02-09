@@ -9,13 +9,20 @@ import (
 
 // Tag constants for family record fields.
 const (
-	TagPartner1  uint16 = 0x0050
-	TagPartner2  uint16 = 0x0051
-	TagChild1    uint16 = 0x00FA
-	TagChild2    uint16 = 0x00FB
-	TagChild3    uint16 = 0x00FC
-	TagMarriage  uint16 = 0x005F
+	TagPartner1 uint16 = 0x0050
+	TagPartner2 uint16 = 0x0051
+	TagMarriage uint16 = 0x005F
 )
+
+// isChildTag returns true if the tag is a child reference (0xFA-0xFF).
+func isChildTag(tag uint16) bool {
+	return tag >= 0x00FA && tag <= 0x00FF
+}
+
+// isFamilyEventTag returns true if the tag is a family event (>= 0x100).
+func isFamilyEventTag(tag uint16) bool {
+	return tag >= 0x0100
+}
 
 // ParseFamily parses a 0x20C8 family record into a Family model.
 func ParseFamily(rec RawRecord, ec *reunion.ErrorCollector) (*model.Family, error) {
@@ -24,79 +31,54 @@ func ParseFamily(rec RawRecord, ec *reunion.ErrorCollector) (*model.Family, erro
 		SeqNum: rec.SeqNum,
 	}
 
-	if len(rec.Data) < 8 {
+	if len(rec.Data) < 6 {
 		return f, nil
 	}
 
-	// Skip timestamp bytes
-	data := rec.Data[8:]
+	fields := ParseTLVFields(rec.Data)
 
-	pos := 0
-	for pos+4 <= len(data) {
-		fieldSize, err := binutil.U16LE(data, pos)
-		if err != nil || fieldSize == 0 {
-			pos += 2
-			continue
-		}
-		tag, err := binutil.U16LE(data, pos+2)
-		if err != nil {
-			break
-		}
-
-		fieldEnd := pos + 4 + int(fieldSize)
-		if fieldEnd > len(data) {
-			fieldEnd = len(data)
-		}
-		fieldData := data[pos+4 : fieldEnd]
-
-		switch tag {
-		case TagPartner1:
-			if len(fieldData) >= 4 {
-				id, _ := binutil.U32LE(fieldData, 0)
+	for _, field := range fields {
+		switch {
+		case field.Tag == TagPartner1:
+			if len(field.Data) >= 4 {
+				id, _ := binutil.U32LE(field.Data, 0)
 				f.Partner1 = id
-			} else if len(fieldData) >= 2 {
-				id, _ := binutil.U16LE(fieldData, 0)
+			} else if len(field.Data) >= 2 {
+				id, _ := binutil.U16LE(field.Data, 0)
 				f.Partner1 = uint32(id)
 			}
-		case TagPartner2:
-			if len(fieldData) >= 4 {
-				id, _ := binutil.U32LE(fieldData, 0)
+		case field.Tag == TagPartner2:
+			if len(field.Data) >= 4 {
+				id, _ := binutil.U32LE(field.Data, 0)
 				f.Partner2 = id
-			} else if len(fieldData) >= 2 {
-				id, _ := binutil.U16LE(fieldData, 0)
+			} else if len(field.Data) >= 2 {
+				id, _ := binutil.U16LE(field.Data, 0)
 				f.Partner2 = uint32(id)
 			}
-		case TagChild1, TagChild2, TagChild3:
-			if len(fieldData) >= 4 {
-				id, _ := binutil.U32LE(fieldData, 0)
+		case isChildTag(field.Tag):
+			if len(field.Data) >= 4 {
+				raw, _ := binutil.U32LE(field.Data, 0)
+				// Child IDs are encoded as u32_LE >> 8
+				id := raw >> 8
 				if id > 0 {
 					f.Children = append(f.Children, id)
 				}
-			} else if len(fieldData) >= 2 {
-				id, _ := binutil.U16LE(fieldData, 0)
-				if id > 0 {
-					f.Children = append(f.Children, uint32(id))
-				}
 			}
+		case isFamilyEventTag(field.Tag):
+			evt := model.FamilyEvent{
+				Tag:       field.Tag,
+				PlaceRefs: ExtractPlaceRefs(field.Data),
+				RawData:   field.Data,
+				SchemaID:  ParseEventField(field.Data),
+			}
+			f.Events = append(f.Events, evt)
 		default:
-			placeRefs := ExtractPlaceRefs(fieldData)
-			if len(placeRefs) > 0 || tag == TagMarriage {
-				evt := model.FamilyEvent{
-					Tag:       tag,
-					PlaceRefs: placeRefs,
-					RawData:   fieldData,
-				}
-				f.Events = append(f.Events, evt)
-			} else {
-				f.RawFields = append(f.RawFields, model.RawField{
-					Tag:  tag,
-					Data: fieldData,
-					Size: fieldSize,
-				})
-			}
+			f.RawFields = append(f.RawFields, model.RawField{
+				Tag:  field.Tag,
+				Data: field.Data,
+				Size: uint16(len(field.Data) + 4),
+			})
 		}
-
-		pos = fieldEnd
 	}
 
 	return f, nil

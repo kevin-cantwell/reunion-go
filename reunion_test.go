@@ -49,10 +49,34 @@ func TestOpen(t *testing.T) {
 		t.Errorf("Persons = %d, want >= 1094", len(ff.Persons))
 	}
 
+	// Verify most persons have names (TLV fix)
+	namedCount := 0
+	for _, p := range ff.Persons {
+		if p.GivenName != "" || p.Surname != "" {
+			namedCount++
+		}
+	}
+	if namedCount < 1000 {
+		t.Errorf("Named persons = %d, want >= 1000", namedCount)
+	}
+	t.Logf("Named persons: %d / %d", namedCount, len(ff.Persons))
+
 	// Verify families from familydata
 	if len(ff.Families) < 770 {
 		t.Errorf("Families = %d, want >= 770", len(ff.Families))
 	}
+
+	// Verify most families have at least one partner (TLV fix)
+	partnerCount := 0
+	for _, f := range ff.Families {
+		if f.Partner1 > 0 || f.Partner2 > 0 {
+			partnerCount++
+		}
+	}
+	if partnerCount < 700 {
+		t.Errorf("Families with partners = %d, want >= 700", partnerCount)
+	}
+	t.Logf("Families with partners: %d / %d", partnerCount, len(ff.Families))
 
 	// Verify event definitions
 	if len(ff.EventDefinitions) < 162 {

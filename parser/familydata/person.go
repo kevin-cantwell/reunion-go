@@ -1,7 +1,6 @@
 package familydata
 
 import (
-	"github.com/kevin-cantwell/reunion-go/internal/binutil"
 	"github.com/kevin-cantwell/reunion-go/model"
 
 	reunion "github.com/kevin-cantwell/reunion-go"
@@ -22,42 +21,23 @@ func ParsePerson(rec RawRecord, ec *reunion.ErrorCollector) (*model.Person, erro
 		SeqNum: rec.SeqNum,
 	}
 
-	if len(rec.Data) < 8 {
+	if len(rec.Data) < 6 {
 		return p, nil
 	}
 
-	// Skip the first 8 bytes (timestamp + flags)
-	data := rec.Data[8:]
+	fields := ParseTLVFields(rec.Data)
 
-	// Parse TLV fields
-	pos := 0
-	for pos+4 <= len(data) {
-		fieldSize, err := binutil.U16LE(data, pos)
-		if err != nil || fieldSize == 0 {
-			pos += 2
-			continue
-		}
-		tag, err := binutil.U16LE(data, pos+2)
-		if err != nil {
-			break
-		}
-
-		fieldEnd := pos + 4 + int(fieldSize)
-		if fieldEnd > len(data) {
-			fieldEnd = len(data)
-		}
-		fieldData := data[pos+4 : fieldEnd]
-
-		switch tag {
+	for _, f := range fields {
+		switch f.Tag {
 		case TagGivenName:
-			p.GivenName = cleanString(fieldData)
+			p.GivenName = cleanString(f.Data)
 		case TagSurname1, TagSurname2:
 			if p.Surname == "" {
-				p.Surname = cleanString(fieldData)
+				p.Surname = cleanString(f.Data)
 			}
 		case TagSexFlags:
-			if len(fieldData) >= 1 {
-				switch fieldData[0] {
+			if len(f.Data) >= 1 {
+				switch f.Data[0] {
 				case 1:
 					p.Sex = model.SexMale
 				case 2:
@@ -65,25 +45,22 @@ func ParsePerson(rec RawRecord, ec *reunion.ErrorCollector) (*model.Person, erro
 				}
 			}
 		default:
-			// Check for events containing [[pt:NNN]]
-			placeRefs := ExtractPlaceRefs(fieldData)
-			if len(placeRefs) > 0 || isEventTag(tag) {
+			if isEventTag(f.Tag) {
 				evt := model.PersonEvent{
-					Tag:       tag,
-					PlaceRefs: placeRefs,
-					RawData:   fieldData,
+					Tag:       f.Tag,
+					PlaceRefs: ExtractPlaceRefs(f.Data),
+					RawData:   f.Data,
+					SchemaID:  ParseEventField(f.Data),
 				}
 				p.Events = append(p.Events, evt)
 			} else {
 				p.RawFields = append(p.RawFields, model.RawField{
-					Tag:  tag,
-					Data: fieldData,
-					Size: fieldSize,
+					Tag:  f.Tag,
+					Data: f.Data,
+					Size: uint16(len(f.Data) + 4),
 				})
 			}
 		}
-
-		pos = fieldEnd
 	}
 
 	return p, nil
@@ -100,7 +77,6 @@ func cleanString(data []byte) string {
 }
 
 func isEventTag(tag uint16) bool {
-	// Event tags typically use codes >= 0x002B in the person record
-	// These are the field tags for birth, death, and other events
-	return tag >= 0x002B && tag <= 0x00FF
+	// Event tags use codes >= 0x100 in the person record
+	return tag >= 0x0100
 }

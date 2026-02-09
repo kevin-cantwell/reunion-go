@@ -17,19 +17,25 @@ type TLVField struct {
 	Data   []byte
 }
 
-// ExtractTLVFields parses TLV fields from record data.
-// The record data (after the preamble) contains fields with:
-// tag(2 LE) + data, where the field boundaries are determined by
-// scanning for known tag patterns.
-func ExtractTLVFields(data []byte) []TLVField {
+// ParseTLVFields parses TLV fields from raw record data.
+// Record data starts with a 6-byte preamble (4-byte timestamp + 2-byte repeated size),
+// followed by fields in the format: total_length(u16 LE) + tag(u16 LE) + data(total_length - 4).
+func ParseTLVFields(data []byte) []TLVField {
+	if len(data) < 6 {
+		return nil
+	}
+
+	// Skip preamble: 4-byte timestamp + 2-byte repeated size
+	return parseTLVFieldsFrom(data[6:])
+}
+
+// parseTLVFieldsFrom parses TLV fields starting at an arbitrary position.
+func parseTLVFieldsFrom(data []byte) []TLVField {
 	var fields []TLVField
 	pos := 0
 
 	for pos+4 <= len(data) {
-		// Read potential field header
-		// Format: some_value(2) + tag(2) or tag(2) + size/offset(2)
-		// We'll try reading as: size(2) + tag(2) = 4 byte header
-		fieldSize, err := binutil.U16LE(data, pos)
+		totalLen, err := binutil.U16LE(data, pos)
 		if err != nil {
 			break
 		}
@@ -38,18 +44,22 @@ func ExtractTLVFields(data []byte) []TLVField {
 			break
 		}
 
-		// Validate: size should be reasonable
-		if fieldSize == 0 {
-			pos += 2
-			continue
+		// total_length includes the 4-byte header itself
+		if totalLen < 4 {
+			break
 		}
 
-		fieldEnd := pos + 4 + int(fieldSize)
+		dataLen := int(totalLen) - 4
+		fieldEnd := pos + int(totalLen)
 		if fieldEnd > len(data) {
 			fieldEnd = len(data)
+			dataLen = fieldEnd - pos - 4
+			if dataLen < 0 {
+				break
+			}
 		}
 
-		fieldData := data[pos+4 : fieldEnd]
+		fieldData := data[pos+4 : pos+4+dataLen]
 
 		fields = append(fields, TLVField{
 			Tag:    tag,
@@ -61,6 +71,23 @@ func ExtractTLVFields(data []byte) []TLVField {
 	}
 
 	return fields
+}
+
+// ParseEventField extracts the schema definition ID from event sub-data.
+// Event fields (tags >= 0x100) contain nested data. After a 4-byte sub-header,
+// the schema definition ID is at offset 12 within the sub-data as u16 LE.
+func ParseEventField(fieldData []byte) (schemaID uint16) {
+	// Sub-data starts after the 4-byte sub-header
+	// Schema ID is at offset 12 within the sub-data (i.e., byte 16 from start of fieldData)
+	// But per the plan: "offset 12 in sub-data (after the 4-byte sub-header)"
+	// So: 4 (sub-header) + 12 = offset 16 from start of fieldData
+	if len(fieldData) >= 18 {
+		id, err := binutil.U16LE(fieldData, 16)
+		if err == nil {
+			schemaID = id
+		}
+	}
+	return
 }
 
 // ExtractPlaceRefs finds all [[pt:NNN]] references in data and returns the place IDs.
