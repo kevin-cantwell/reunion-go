@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/kevin-cantwell/reunion-go/model"
 )
 
 var (
@@ -26,12 +28,17 @@ func buildOpenAPISpec() map[string]any {
 	schemaFromType(reflect.TypeOf(PersonRef{}), schemas)
 	schemaFromType(reflect.TypeOf(PersonDetail{}), schemas)
 	schemaFromType(reflect.TypeOf(ResolvedEvent{}), schemas)
+	schemaFromType(reflect.TypeOf(TreeEntryRef{}), schemas)
 	schemaFromType(reflect.TypeOf(PlaceRef{}), schemas)
 	schemaFromType(reflect.TypeOf(FamilyRef{}), schemas)
 	schemaFromType(reflect.TypeOf(FamilyDetail{}), schemas)
 	schemaFromType(reflect.TypeOf(StatsResponse{}), schemas)
 	schemaFromType(reflect.TypeOf(SummaryResponse{}), schemas)
 	schemaFromType(reflect.TypeOf(PaginatedResponse{}), schemas)
+	schemaFromType(reflect.TypeOf(model.Place{}), schemas)
+	schemaFromType(reflect.TypeOf(model.EventDefinition{}), schemas)
+	schemaFromType(reflect.TypeOf(model.Source{}), schemas)
+	schemaFromType(reflect.TypeOf(model.Note{}), schemas)
 
 	return map[string]any{
 		"openapi": "3.1.0",
@@ -58,8 +65,8 @@ func buildPaths() map[string]any {
 		),
 		"/api/persons/{id}":             pathItemWithID("get", "Get person detail", "PersonDetail"),
 		"/api/persons/{id}/families":    pathItemWithID("get", "Get person's families", "array:FamilyDetail"),
-		"/api/persons/{id}/ancestors":   pathItemWithIDAndParams("get", "Get ancestors", "array:TreeEntry", queryParam("generations", "integer", "Max generations")),
-		"/api/persons/{id}/descendants": pathItemWithIDAndParams("get", "Get descendants", "array:TreeEntry", queryParam("generations", "integer", "Max generations")),
+		"/api/persons/{id}/ancestors":   pathItemWithIDAndParams("get", "Get ancestors", "array:TreeEntryRef", queryParam("generations", "integer", "Max generations")),
+		"/api/persons/{id}/descendants": pathItemWithIDAndParams("get", "Get descendants", "array:TreeEntryRef", queryParam("generations", "integer", "Max generations")),
 		"/api/persons/{id}/treetops":    pathItemWithID("get", "Get treetops", "array:PersonRef"),
 		"/api/persons/{id}/summary":     pathItemWithID("get", "Get person summary", "SummaryResponse"),
 		"/api/families": pathItemWithParams("get", "List families", "PaginatedResponse",
