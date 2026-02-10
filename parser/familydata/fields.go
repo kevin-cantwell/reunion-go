@@ -160,16 +160,27 @@ func ExtractDate(fieldData []byte) string {
 
 	monthNames := [13]string{"", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
 
+	// Precision flags encode qualifier and precision:
+	//   bit 6 (0x40): "after" qualifier
+	//   bits 7+5 (0xA0): year-only precision (month is a meaningless default)
+	//   0x40 = "after" with month precision
+	//   0xA0 = "about" with year-only precision
+	//   0xE0 = "after" with year-only precision
+	yearOnly := precFlags&0xA0 == 0xA0
+
 	prefix := ""
 	switch {
-	case precFlags == 0xA0 || precFlags == 0xE0:
+	case precFlags&0x40 != 0:
+		prefix = "after "
+	case yearOnly:
 		prefix = "about "
 	case isBefore:
 		prefix = "before "
-	case precFlags == 0x40:
-		prefix = "after "
 	}
 
+	if yearOnly {
+		return fmt.Sprintf("%s%d", prefix, year)
+	}
 	if day > 0 && day <= 31 {
 		return fmt.Sprintf("%s%d %s %d", prefix, day, monthNames[month], year)
 	}
