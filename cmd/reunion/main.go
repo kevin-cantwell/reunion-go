@@ -44,6 +44,7 @@ func init() {
 	rootCmd.AddCommand(descendantsCmd)
 	rootCmd.AddCommand(summaryCmd)
 	rootCmd.AddCommand(treetopsCmd)
+	rootCmd.AddCommand(serveCmd)
 }
 
 func jsonFlag(cmd *cobra.Command) bool {

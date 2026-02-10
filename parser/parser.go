@@ -3,6 +3,7 @@ package parser
 
 import (
 	"fmt"
+	"strings"
 
 	reunion "github.com/kevin-cantwell/reunion-go"
 	"github.com/kevin-cantwell/reunion-go/bundle"
@@ -63,17 +64,19 @@ func (p *V14Parser) Parse(bundlePath string, opts reunion.ParseOptions) (*model.
 		ff.EventDefinitions = result.EventDefinitions
 		ff.Sources = result.Sources
 		ff.MediaRefs = result.MediaRefs
+		ff.Places = result.Places
 		// Inline notes from familydata
 		ff.Notes = result.Notes
 	}
 
-	// Parse cache files
+	// Enrich familydata place names with full-length names from places.cache.
+	// Familydata has correct IDs but truncated names; places.cache has full names.
 	if path, ok := b.Caches["places.cache"]; ok {
-		places, err := cache.ParsePlaces(path)
+		cachePlaces, err := cache.ParsePlaces(path)
 		if err != nil {
-			ec.Add("places.cache", -1, "failed to parse", err)
+			ec.Add("places.cache", -1, "failed to parse for name enrichment", err)
 		} else {
-			ff.Places = places
+			enrichPlaceNames(ff.Places, cachePlaces)
 		}
 	}
 
@@ -202,4 +205,118 @@ func (p *V14Parser) Parse(bundlePath string, opts reunion.ParseOptions) (*model.
 	}
 
 	return ff, nil
+}
+
+// enrichPlaceNames upgrades truncated familydata place names with full-length
+// names from places.cache. It first tries matching by ID. For remaining
+// unmatched places, it falls back to prefix matching, requiring the prefix
+// boundary to fall at a natural break point (comma, space) in the full name
+// to avoid false matches like "Paris" → "Paris, Texas".
+func enrichPlaceNames(places []model.Place, cachePlaces []model.Place) {
+	// Build ID-keyed lookup from cache
+	byID := make(map[uint32]string, len(cachePlaces))
+	cacheNames := make([]string, 0, len(cachePlaces))
+	for _, cp := range cachePlaces {
+		if cp.Name != "" {
+			byID[cp.ID] = cp.Name
+			cacheNames = append(cacheNames, cp.Name)
+		}
+	}
+
+	for i := range places {
+		name := places[i].Name
+		if name == "" {
+			continue
+		}
+		// Strategy 1: match by ID
+		if cn, ok := byID[places[i].ID]; ok && len(cn) > len(name) && strings.HasPrefix(cn, name) {
+			places[i].Name = cn
+			continue
+		}
+
+		// Strategy 2: prefix match with truncation detection.
+		// The binary format uses fixed-width fields, so truncation can cut
+		// mid-word ("Califo") or right after a delimiter ("Glen Cove, New ").
+		// We accept the match if:
+		//   - The name has a trailing space (clearly cut mid-field), OR
+		//   - The next char in the full name is a letter/digit (mid-word cut)
+		// We reject if the name ends at a clean word boundary and the full
+		// name continues with a delimiter (e.g., "Paris" → "Paris, Texas").
+		bestMatch := ""
+		for _, cn := range cacheNames {
+			if cn == name {
+				bestMatch = ""
+				break
+			}
+			if len(cn) > len(name) && strings.HasPrefix(cn, name) {
+				trailingSpace := name[len(name)-1] == ' '
+				nextChar := cn[len(name)]
+				midWordCut := nextChar != ',' && nextChar != ' '
+				if trailingSpace || midWordCut {
+					if bestMatch == "" || len(cn) < len(bestMatch) {
+						bestMatch = cn
+					}
+				}
+			}
+		}
+		if bestMatch != "" {
+			places[i].Name = bestMatch
+		}
+	}
+
+	// Strategy 3: fix truncated trailing components.
+	// Build component frequency from cache to identify reliable components.
+	// Components appearing only once that are prefixes of more-common ones
+	// are likely truncation artifacts in the cache itself.
+	compFreq := make(map[string]int)
+	for _, cp := range cachePlaces {
+		for _, part := range strings.Split(cp.Name, ", ") {
+			part = strings.TrimSpace(part)
+			if len(part) > 1 {
+				compFreq[part]++
+			}
+		}
+	}
+	// Build clean component set: exclude single-occurrence components that
+	// are strict prefixes of a more-frequent component.
+	components := make(map[string]bool)
+	for comp, freq := range compFreq {
+		if freq == 1 {
+			isPrefix := false
+			for other, oFreq := range compFreq {
+				if oFreq > 1 && len(other) > len(comp) && strings.HasPrefix(other, comp) {
+					isPrefix = true
+					break
+				}
+			}
+			if isPrefix {
+				continue // likely a truncation artifact
+			}
+		}
+		components[comp] = true
+	}
+
+	for i := range places {
+		name := places[i].Name
+		commaIdx := strings.LastIndex(name, ", ")
+		if commaIdx == -1 {
+			continue
+		}
+		lastPart := name[commaIdx+2:]
+		if lastPart == "" || components[lastPart] {
+			continue // empty or already a known-good component
+		}
+		// Find the shortest known component this is a prefix of
+		var match string
+		for comp := range components {
+			if len(comp) > len(lastPart) && strings.HasPrefix(comp, lastPart) {
+				if match == "" || len(comp) < len(match) {
+					match = comp
+				}
+			}
+		}
+		if match != "" {
+			places[i].Name = name[:commaIdx+2] + match
+		}
+	}
 }

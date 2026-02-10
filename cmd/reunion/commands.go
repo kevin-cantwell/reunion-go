@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/kevin-cantwell/reunion-go/index"
 	"github.com/kevin-cantwell/reunion-go/model"
 )
 
@@ -270,11 +271,8 @@ func cmdSearch(ff *model.FamilyFile, query string, asJSON bool) error {
 
 // --- ancestors ---
 
-// treeEntry pairs a person record with their generation depth for JSON output.
-type treeEntry struct {
-	Generation int           `json:"generation"`
-	Person     *model.Person `json:"person"`
-}
+// treeEntry is an alias for index.TreeEntry.
+type treeEntry = index.TreeEntry
 
 func cmdAncestors(idx *Index, id uint32, maxGen int, asJSON bool) error {
 	p, ok := idx.Persons[id]

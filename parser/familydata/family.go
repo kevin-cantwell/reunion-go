@@ -70,6 +70,7 @@ func ParseFamily(rec RawRecord, ec *reunion.ErrorCollector) (*model.Family, erro
 				PlaceRefs: ExtractPlaceRefs(field.Data),
 				RawData:   field.Data,
 				SchemaID:  ParseEventField(field.Data),
+				Date:      ExtractDate(field.Data),
 			}
 			f.Events = append(f.Events, evt)
 		default:
