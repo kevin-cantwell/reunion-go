@@ -107,5 +107,32 @@ func ScanRecords(data []byte) []RawRecord {
 		pos = markerPos + 4
 	}
 
+	// Extend each record's data to include any bytes between the declared
+	// DataLen boundary and the next record's marker. Some records (notably
+	// families) have child reference data that overflows past the declared
+	// DataLen. The overflow bytes may sit in the inter-record gap or in the
+	// 4-byte "padding" area at the start of the next record's header.
+	// The TLV parser safely stops on zero padding (totalLen=0 < 4 → break)
+	// or small header values (totalLen < 4 → break).
+	for i := range records {
+		dataStart := records[i].Offset + 20 // markerPos+12 = Offset+8+12 = Offset+20
+		// Use the next record's marker position (Offset+8) as the upper bound,
+		// since the 4 bytes between Offset and Offset+4 can contain overflow
+		// data rather than true padding.
+		var boundary int
+		if i+1 < len(records) {
+			boundary = records[i+1].Offset + 8 // next marker position
+		} else {
+			boundary = len(data)
+		}
+		if boundary > len(data) {
+			boundary = len(data)
+		}
+		declaredEnd := dataStart + int(records[i].DataLen)
+		if boundary > declaredEnd && dataStart < len(data) {
+			records[i].Data = data[dataStart:boundary]
+		}
+	}
+
 	return records
 }

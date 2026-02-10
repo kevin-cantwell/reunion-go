@@ -274,6 +274,9 @@ func (idx *Index) collectAncestors(id uint32, gen, maxGen int, visited map[uint3
 	visited[id] = true
 
 	for _, pid := range idx.Parents(id) {
+		if visited[pid] {
+			continue
+		}
 		p, ok := idx.Persons[pid]
 		if !ok {
 			continue
@@ -298,6 +301,9 @@ func (idx *Index) collectDescendants(id uint32, gen, maxGen int, visited map[uin
 	visited[id] = true
 
 	for _, cid := range idx.ChildrenOf(id) {
+		if visited[cid] {
+			continue
+		}
 		c, ok := idx.Persons[cid]
 		if !ok {
 			continue

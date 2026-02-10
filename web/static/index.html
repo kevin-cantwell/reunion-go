@@ -230,24 +230,24 @@
 
         <!-- Action Buttons -->
         <div class="action-buttons">
-          <button @click="loadAncestors()" class="btn">Ancestors</button>
-          <button @click="loadDescendants()" class="btn">Descendants</button>
-          <button @click="loadTreetops()" class="btn">Treetops</button>
-          <button @click="loadSummary()" class="btn">Summary</button>
+          <button @click="togglePanel('ancestors')" class="btn" :class="{ active: activePanel === 'ancestors' }">Ancestors</button>
+          <button @click="togglePanel('descendants')" class="btn" :class="{ active: activePanel === 'descendants' }">Descendants</button>
+          <button @click="togglePanel('treetops')" class="btn" :class="{ active: activePanel === 'treetops' }">Treetops</button>
+          <button @click="togglePanel('summary')" class="btn" :class="{ active: activePanel === 'summary' }">Summary</button>
         </div>
 
         <!-- Ancestors (inline expandable) -->
-        <div class="card" x-show="ancestorsList.length > 0">
+        <div class="card" x-show="activePanel === 'ancestors' && ancestorsList.length > 0">
           <h3>Ancestors <span class="count" x-text="'(' + ancestorsList.length + ')'"></span></h3>
           <table>
             <thead><tr><th>Gen</th><th>ID</th><th>Name</th><th>Sex</th></tr></thead>
             <tbody>
-              <template x-for="a in ancestorsList" :key="a.person.id">
-                <tr @click="navigate('person', a.person.id)" class="clickable">
+              <template x-for="a in ancestorsList" :key="a.id">
+                <tr @click="navigate('person', a.id)" class="clickable">
                   <td x-text="a.generation"></td>
-                  <td x-text="a.person.id"></td>
-                  <td x-text="formatPersonName(a.person)"></td>
-                  <td x-text="sexLabel(a.person.sex)"></td>
+                  <td x-text="a.id"></td>
+                  <td x-text="a.name"></td>
+                  <td x-text="a.sex"></td>
                 </tr>
               </template>
             </tbody>
@@ -255,17 +255,17 @@
         </div>
 
         <!-- Descendants (inline expandable) -->
-        <div class="card" x-show="descendantsList.length > 0">
+        <div class="card" x-show="activePanel === 'descendants' && descendantsList.length > 0">
           <h3>Descendants <span class="count" x-text="'(' + descendantsList.length + ')'"></span></h3>
           <table>
             <thead><tr><th>Gen</th><th>ID</th><th>Name</th><th>Sex</th></tr></thead>
             <tbody>
-              <template x-for="d in descendantsList" :key="d.person.id">
-                <tr @click="navigate('person', d.person.id)" class="clickable">
+              <template x-for="d in descendantsList" :key="d.id">
+                <tr @click="navigate('person', d.id)" class="clickable">
                   <td x-text="d.generation"></td>
-                  <td x-text="d.person.id"></td>
-                  <td x-text="formatPersonName(d.person)"></td>
-                  <td x-text="sexLabel(d.person.sex)"></td>
+                  <td x-text="d.id"></td>
+                  <td x-text="d.name"></td>
+                  <td x-text="d.sex"></td>
                 </tr>
               </template>
             </tbody>
@@ -273,7 +273,7 @@
         </div>
 
         <!-- Treetops (inline expandable) -->
-        <div class="card" x-show="treetopsList.length > 0">
+        <div class="card" x-show="activePanel === 'treetops' && treetopsList.length > 0">
           <h3>Treetops <span class="count" x-text="'(' + treetopsList.length + ')'"></span></h3>
           <ul class="person-list">
             <template x-for="t in treetopsList" :key="t.id">
@@ -283,7 +283,7 @@
         </div>
 
         <!-- Summary (inline expandable) -->
-        <div class="card" x-show="summaryData">
+        <div class="card" x-show="activePanel === 'summary' && summaryData">
           <h3>Summary</h3>
           <div class="summary-grid">
             <div><strong>Spouses:</strong> <span x-text="summaryData?.spouses || 0"></span></div>

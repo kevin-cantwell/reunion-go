@@ -19,6 +19,14 @@ type PersonRef struct {
 	Sex  string `json:"sex"`
 }
 
+// TreeEntryRef is a lightweight ancestor/descendant entry.
+type TreeEntryRef struct {
+	Generation int    `json:"generation"`
+	ID         uint32 `json:"id"`
+	Name       string `json:"name"`
+	Sex        string `json:"sex"`
+}
+
 // PersonDetail is a full person record with resolved relationships.
 type PersonDetail struct {
 	ID             uint32          `json:"id"`
@@ -325,7 +333,16 @@ func (s *Server) handlePersonAncestors(w http.ResponseWriter, r *http.Request) {
 	}
 	gen := parseIntQuery(r, "generations", 10)
 	entries := s.idx.Ancestors(id, gen)
-	writeJSON(w, http.StatusOK, entries)
+	refs := make([]TreeEntryRef, 0, len(entries))
+	for _, e := range entries {
+		refs = append(refs, TreeEntryRef{
+			Generation: e.Generation,
+			ID:         e.Person.ID,
+			Name:       index.FormatName(e.Person),
+			Sex:        e.Person.Sex.String(),
+		})
+	}
+	writeJSON(w, http.StatusOK, refs)
 }
 
 func (s *Server) handlePersonDescendants(w http.ResponseWriter, r *http.Request) {
@@ -340,7 +357,16 @@ func (s *Server) handlePersonDescendants(w http.ResponseWriter, r *http.Request)
 	}
 	gen := parseIntQuery(r, "generations", 10)
 	entries := s.idx.Descendants(id, gen)
-	writeJSON(w, http.StatusOK, entries)
+	refs := make([]TreeEntryRef, 0, len(entries))
+	for _, e := range entries {
+		refs = append(refs, TreeEntryRef{
+			Generation: e.Generation,
+			ID:         e.Person.ID,
+			Name:       index.FormatName(e.Person),
+			Sex:        e.Person.Sex.String(),
+		})
+	}
+	writeJSON(w, http.StatusOK, refs)
 }
 
 func (s *Server) handlePersonTreetops(w http.ResponseWriter, r *http.Request) {
