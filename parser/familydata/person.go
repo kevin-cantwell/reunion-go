@@ -51,8 +51,21 @@ func ParsePerson(rec RawRecord, ec *reunion.ErrorCollector) (*model.Person, erro
 					PlaceRefs: ExtractPlaceRefs(f.Data),
 					RawData:   f.Data,
 					SchemaID:  ParseEventField(f.Data),
+					Date:      ExtractDate(f.Data),
 				}
 				p.Events = append(p.Events, evt)
+
+				// For note-type events (tag < 0x03E8), extract the note reference
+				if f.Tag < 0x03E8 {
+					noteID := ExtractNoteRef(f.Data)
+					if noteID > 0 {
+						p.NoteRefs = append(p.NoteRefs, model.NoteRef{
+							NoteID:   noteID,
+							EventTag: f.Tag,
+							SchemaID: evt.SchemaID,
+						})
+					}
+				}
 			} else {
 				p.RawFields = append(p.RawFields, model.RawField{
 					Tag:  f.Tag,

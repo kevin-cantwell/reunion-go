@@ -20,3 +20,17 @@ type MarkupNode struct {
 	Value    string         `json:"value,omitempty"`    // attribute value (font flag number, color, URL)
 	Children []MarkupNode   `json:"children,omitempty"` // for container nodes
 }
+
+// PlainText recursively extracts text content from markup nodes,
+// stripping all formatting tags and returning readable plain text.
+func PlainText(nodes []MarkupNode) string {
+	var b []byte
+	for _, n := range nodes {
+		if n.Type == MarkupText {
+			b = append(b, n.Text...)
+		} else {
+			b = append(b, PlainText(n.Children)...)
+		}
+	}
+	return string(b)
+}

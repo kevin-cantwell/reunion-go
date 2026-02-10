@@ -21,6 +21,7 @@ func ParseNote(rec RawRecord, ec *reunion.ErrorCollector) (*model.Note, error) {
 		n.RawText = text
 		if text != "" {
 			n.Markup = notes.ParseMarkup(text)
+			n.DisplayText = model.PlainText(n.Markup)
 		}
 	}
 

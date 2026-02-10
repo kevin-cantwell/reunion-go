@@ -1,0 +1,596 @@
+package web
+
+import (
+	"fmt"
+	"net/http"
+	"sort"
+	"strings"
+
+	"github.com/kevin-cantwell/reunion-go/index"
+	"github.com/kevin-cantwell/reunion-go/model"
+)
+
+// --- Response Types ---
+
+// PersonRef is a lightweight person reference for lists and links.
+type PersonRef struct {
+	ID   uint32 `json:"id"`
+	Name string `json:"name"`
+	Sex  string `json:"sex"`
+}
+
+// PersonDetail is a full person record with resolved relationships.
+type PersonDetail struct {
+	ID             uint32          `json:"id"`
+	GivenName      string          `json:"given_name,omitempty"`
+	Surname        string          `json:"surname,omitempty"`
+	Name           string          `json:"name"`
+	Sex            int             `json:"sex"`
+	SexLabel       string          `json:"sex_label"`
+	ResolvedEvents []ResolvedEvent `json:"resolved_events,omitempty"`
+	Notes          []NoteDisplay   `json:"notes,omitempty"`
+	Spouses        []PersonRef     `json:"spouses,omitempty"`
+	Children       []PersonRef     `json:"children,omitempty"`
+	Parents        []PersonRef     `json:"parents,omitempty"`
+	Siblings       []PersonRef     `json:"siblings,omitempty"`
+}
+
+// ResolvedEvent is a person event with resolved schema and place names.
+type ResolvedEvent struct {
+	SchemaID   uint16     `json:"schema_id"`
+	SchemaName string     `json:"schema_name,omitempty"`
+	Tag        uint16     `json:"tag"`
+	Date       string     `json:"date,omitempty"`
+	Places     []PlaceRef `json:"places,omitempty"`
+	IsNote     bool       `json:"is_note,omitempty"`
+}
+
+// PlaceRef is a lightweight place reference.
+type PlaceRef struct {
+	ID   uint32 `json:"id"`
+	Name string `json:"name"`
+}
+
+// NoteDisplay is a lightweight note with display text for person detail views.
+type NoteDisplay struct {
+	ID    uint32 `json:"id"`
+	Label string `json:"label,omitempty"`
+	Text  string `json:"text"`
+}
+
+// FamilyRef is a lightweight family reference for lists.
+type FamilyRef struct {
+	ID            uint32 `json:"id"`
+	Partner1Name  string `json:"partner1_name,omitempty"`
+	Partner2Name  string `json:"partner2_name,omitempty"`
+	ChildrenCount int    `json:"children_count"`
+}
+
+// FamilyDetail is a full family record with resolved names.
+type FamilyDetail struct {
+	ID             uint32      `json:"id"`
+	Partner1       uint32      `json:"partner1,omitempty"`
+	Partner2       uint32      `json:"partner2,omitempty"`
+	Partner1Detail *PersonRef  `json:"partner1_detail,omitempty"`
+	Partner2Detail *PersonRef  `json:"partner2_detail,omitempty"`
+	ChildrenDetail []PersonRef `json:"children_detail,omitempty"`
+}
+
+// StatsResponse contains summary counts.
+type StatsResponse struct {
+	Persons             int `json:"persons"`
+	PersonsNamed        int `json:"persons_named"`
+	PersonsMale         int `json:"persons_male"`
+	PersonsFemale       int `json:"persons_female"`
+	PersonsUnknownSex   int `json:"persons_unknown_sex"`
+	Families            int `json:"families"`
+	FamiliesWithPartners int `json:"families_with_partners"`
+	FamiliesWithChildren int `json:"families_with_children"`
+	Places              int `json:"places"`
+	EventTypes          int `json:"event_types"`
+	Sources             int `json:"sources"`
+	Notes               int `json:"notes"`
+	Media               int `json:"media"`
+}
+
+// SummaryResponse provides per-person statistics.
+type SummaryResponse struct {
+	Person      string         `json:"person"`
+	ID          uint32         `json:"id"`
+	Spouses     int            `json:"spouses"`
+	Siblings    int            `json:"siblings"`
+	Ancestors   int            `json:"ancestors"`
+	Descendants int            `json:"descendants"`
+	Treetops    int            `json:"treetops"`
+	Surnames    map[string]int `json:"surnames,omitempty"`
+}
+
+// PaginatedResponse wraps a paginated list.
+type PaginatedResponse struct {
+	Items any `json:"items"`
+	Total int `json:"total"`
+	Page  int `json:"page"`
+}
+
+// --- Helpers ---
+
+func (s *Server) personRef(id uint32) PersonRef {
+	p, ok := s.idx.Persons[id]
+	if !ok {
+		return PersonRef{ID: id, Name: "?"}
+	}
+	return PersonRef{ID: id, Name: index.FormatName(p), Sex: p.Sex.String()}
+}
+
+func (s *Server) personRefs(ids []uint32) []PersonRef {
+	refs := make([]PersonRef, 0, len(ids))
+	for _, id := range ids {
+		refs = append(refs, s.personRef(id))
+	}
+	return refs
+}
+
+func (s *Server) resolveEvents(events []model.PersonEvent) []ResolvedEvent {
+	resolved := make([]ResolvedEvent, 0, len(events))
+	for _, evt := range events {
+		re := ResolvedEvent{
+			SchemaID:   evt.SchemaID,
+			SchemaName: s.idx.SchemaName(evt.SchemaID),
+			Tag:        evt.Tag,
+			Date:       evt.Date,
+			IsNote:     evt.Tag < 0x03E8, // tags below 1000 are note references
+		}
+		for _, placeRef := range evt.PlaceRefs {
+			pid := uint32(placeRef)
+			name := s.idx.PlaceName(placeRef)
+			re.Places = append(re.Places, PlaceRef{ID: pid, Name: name})
+		}
+		resolved = append(resolved, re)
+	}
+	return resolved
+}
+
+// --- Handlers ---
+
+func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
+	male, female, unknown, named := 0, 0, 0, 0
+	for _, p := range s.ff.Persons {
+		switch p.Sex {
+		case model.SexMale:
+			male++
+		case model.SexFemale:
+			female++
+		default:
+			unknown++
+		}
+		if p.GivenName != "" || p.Surname != "" {
+			named++
+		}
+	}
+	withPartners, withChildren := 0, 0
+	for _, f := range s.ff.Families {
+		if f.Partner1 > 0 || f.Partner2 > 0 {
+			withPartners++
+		}
+		if len(f.Children) > 0 {
+			withChildren++
+		}
+	}
+	writeJSON(w, http.StatusOK, StatsResponse{
+		Persons:              len(s.ff.Persons),
+		PersonsNamed:         named,
+		PersonsMale:          male,
+		PersonsFemale:        female,
+		PersonsUnknownSex:    unknown,
+		Families:             len(s.ff.Families),
+		FamiliesWithPartners: withPartners,
+		FamiliesWithChildren: withChildren,
+		Places:               len(s.ff.Places),
+		EventTypes:           len(s.ff.EventDefinitions),
+		Sources:              len(s.ff.Sources),
+		Notes:                len(s.ff.Notes),
+		Media:                len(s.ff.MediaRefs),
+	})
+}
+
+func (s *Server) handlePersons(w http.ResponseWriter, r *http.Request) {
+	surname := r.URL.Query().Get("surname")
+	query := r.URL.Query().Get("q")
+	page := parseIntQuery(r, "page", 1)
+	perPage := parseIntQuery(r, "per_page", 100)
+
+	var refs []PersonRef
+	for i := range s.ff.Persons {
+		p := &s.ff.Persons[i]
+		if surname != "" && !strings.EqualFold(p.Surname, surname) {
+			continue
+		}
+		if query != "" {
+			name := strings.ToLower(index.FormatName(p))
+			if !strings.Contains(name, strings.ToLower(query)) {
+				continue
+			}
+		}
+		refs = append(refs, PersonRef{ID: p.ID, Name: index.FormatName(p), Sex: p.Sex.String()})
+	}
+
+	total := len(refs)
+	start := (page - 1) * perPage
+	if start > total {
+		start = total
+	}
+	end := start + perPage
+	if end > total {
+		end = total
+	}
+
+	writeJSON(w, http.StatusOK, PaginatedResponse{
+		Items: refs[start:end],
+		Total: total,
+		Page:  page,
+	})
+}
+
+func (s *Server) handlePerson(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	p, ok := s.idx.Persons[id]
+	if !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("person %d not found", id))
+		return
+	}
+
+	// Collect notes from person's NoteRefs (inline notes linked via event data)
+	var notes []NoteDisplay
+	for _, ref := range p.NoteRefs {
+		n, ok := s.idx.Notes[ref.NoteID]
+		if !ok || n.DisplayText == "" {
+			continue
+		}
+		notes = append(notes, NoteDisplay{
+			ID:    n.ID,
+			Label: s.idx.SchemaName(ref.SchemaID),
+			Text:  n.DisplayText,
+		})
+	}
+	// Also include file-based notes linked by PersonID
+	for i := range s.ff.Notes {
+		n := &s.ff.Notes[i]
+		if n.PersonID == int(p.ID) && n.DisplayText != "" {
+			notes = append(notes, NoteDisplay{
+				ID:    n.ID,
+				Label: s.idx.SchemaName(uint16(n.SourceID)),
+				Text:  n.DisplayText,
+			})
+		}
+	}
+
+	detail := PersonDetail{
+		ID:             p.ID,
+		GivenName:      p.GivenName,
+		Surname:        p.Surname,
+		Name:           index.FormatName(p),
+		Sex:            int(p.Sex),
+		SexLabel:       p.Sex.String(),
+		ResolvedEvents: s.resolveEvents(p.Events),
+		Notes:          notes,
+		Spouses:        s.personRefs(s.idx.Spouses(p.ID)),
+		Children:       s.personRefs(s.idx.ChildrenOf(p.ID)),
+		Parents:        s.personRefs(s.idx.Parents(p.ID)),
+		Siblings:       s.personRefs(s.idx.Siblings(p.ID)),
+	}
+
+	writeJSON(w, http.StatusOK, detail)
+}
+
+func (s *Server) handlePersonFamilies(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, ok := s.idx.Persons[id]; !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("person %d not found", id))
+		return
+	}
+
+	famIDs := s.idx.FamiliesForPerson(id)
+	details := make([]FamilyDetail, 0, len(famIDs))
+	for _, fid := range famIDs {
+		f, ok := s.idx.Families[fid]
+		if !ok {
+			continue
+		}
+		details = append(details, s.buildFamilyDetail(f))
+	}
+	writeJSON(w, http.StatusOK, details)
+}
+
+func (s *Server) handlePersonAncestors(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, ok := s.idx.Persons[id]; !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("person %d not found", id))
+		return
+	}
+	gen := parseIntQuery(r, "generations", 10)
+	entries := s.idx.Ancestors(id, gen)
+	writeJSON(w, http.StatusOK, entries)
+}
+
+func (s *Server) handlePersonDescendants(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, ok := s.idx.Persons[id]; !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("person %d not found", id))
+		return
+	}
+	gen := parseIntQuery(r, "generations", 10)
+	entries := s.idx.Descendants(id, gen)
+	writeJSON(w, http.StatusOK, entries)
+}
+
+func (s *Server) handlePersonTreetops(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, ok := s.idx.Persons[id]; !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("person %d not found", id))
+		return
+	}
+	persons := s.idx.Treetops(id)
+	refs := make([]PersonRef, 0, len(persons))
+	for _, p := range persons {
+		refs = append(refs, PersonRef{ID: p.ID, Name: index.FormatName(p), Sex: p.Sex.String()})
+	}
+	writeJSON(w, http.StatusOK, refs)
+}
+
+func (s *Server) handlePersonSummary(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	p, ok := s.idx.Persons[id]
+	if !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("person %d not found", id))
+		return
+	}
+
+	spouses := s.idx.Spouses(p.ID)
+	siblings := s.idx.Siblings(p.ID)
+	ancestors := s.idx.Ancestors(p.ID, 100)
+	descendants := s.idx.Descendants(p.ID, 100)
+	treetops := s.idx.Treetops(p.ID)
+
+	surnameCounts := make(map[string]int)
+	for _, a := range ancestors {
+		if a.Person.Surname != "" {
+			surnameCounts[a.Person.Surname]++
+		}
+	}
+
+	writeJSON(w, http.StatusOK, SummaryResponse{
+		Person:      index.FormatName(p),
+		ID:          p.ID,
+		Spouses:     len(spouses),
+		Siblings:    len(siblings),
+		Ancestors:   len(ancestors),
+		Descendants: len(descendants),
+		Treetops:    len(treetops),
+		Surnames:    surnameCounts,
+	})
+}
+
+func (s *Server) handleFamilies(w http.ResponseWriter, r *http.Request) {
+	page := parseIntQuery(r, "page", 1)
+	perPage := parseIntQuery(r, "per_page", 100)
+
+	refs := make([]FamilyRef, 0, len(s.ff.Families))
+	for _, f := range s.ff.Families {
+		ref := FamilyRef{
+			ID:            f.ID,
+			ChildrenCount: len(f.Children),
+		}
+		if f.Partner1 > 0 {
+			ref.Partner1Name = s.idx.PersonName(f.Partner1)
+		}
+		if f.Partner2 > 0 {
+			ref.Partner2Name = s.idx.PersonName(f.Partner2)
+		}
+		refs = append(refs, ref)
+	}
+
+	total := len(refs)
+	start := (page - 1) * perPage
+	if start > total {
+		start = total
+	}
+	end := start + perPage
+	if end > total {
+		end = total
+	}
+
+	writeJSON(w, http.StatusOK, PaginatedResponse{
+		Items: refs[start:end],
+		Total: total,
+		Page:  page,
+	})
+}
+
+func (s *Server) handleFamily(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	f, ok := s.idx.Families[id]
+	if !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("family %d not found", id))
+		return
+	}
+	writeJSON(w, http.StatusOK, s.buildFamilyDetail(f))
+}
+
+func (s *Server) buildFamilyDetail(f *model.Family) FamilyDetail {
+	d := FamilyDetail{
+		ID:       f.ID,
+		Partner1: f.Partner1,
+		Partner2: f.Partner2,
+	}
+	if f.Partner1 > 0 {
+		ref := s.personRef(f.Partner1)
+		d.Partner1Detail = &ref
+	}
+	if f.Partner2 > 0 {
+		ref := s.personRef(f.Partner2)
+		d.Partner2Detail = &ref
+	}
+	d.ChildrenDetail = make([]PersonRef, 0, len(f.Children))
+	for _, cid := range f.Children {
+		d.ChildrenDetail = append(d.ChildrenDetail, s.personRef(cid))
+	}
+	return d
+}
+
+func (s *Server) handlePlaces(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.ff.Places)
+}
+
+func (s *Server) handlePlace(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	p, ok := s.idx.Places[id]
+	if !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("place %d not found", id))
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+func (s *Server) handlePlacePersons(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, ok := s.idx.Places[id]; !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("place %d not found", id))
+		return
+	}
+	personIDs := s.idx.PersonsByPlace(id)
+	writeJSON(w, http.StatusOK, s.personRefs(personIDs))
+}
+
+func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.ff.EventDefinitions)
+}
+
+func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	e, ok := s.idx.Schemas[id]
+	if !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("event type %d not found", id))
+		return
+	}
+	writeJSON(w, http.StatusOK, e)
+}
+
+func (s *Server) handleEventPersons(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, ok := s.idx.Schemas[id]; !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("event type %d not found", id))
+		return
+	}
+	personIDs := s.idx.PersonsBySchema(id)
+	writeJSON(w, http.StatusOK, s.personRefs(personIDs))
+}
+
+func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.ff.Sources)
+}
+
+func (s *Server) handleSource(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	src, ok := s.idx.Sources[id]
+	if !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("source %d not found", id))
+		return
+	}
+	writeJSON(w, http.StatusOK, src)
+}
+
+func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
+	personIDStr := r.URL.Query().Get("person_id")
+	if personIDStr != "" {
+		pid := parseIntQuery(r, "person_id", 0)
+		var filtered []model.Note
+		for _, n := range s.ff.Notes {
+			if n.PersonID == pid {
+				filtered = append(filtered, n)
+			}
+		}
+		writeJSON(w, http.StatusOK, filtered)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.ff.Notes)
+}
+
+func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	n, ok := s.idx.Notes[id]
+	if !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("note %d not found", id))
+		return
+	}
+	writeJSON(w, http.StatusOK, n)
+}
+
+func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		writeJSON(w, http.StatusOK, []PersonRef{})
+		return
+	}
+	persons := s.idx.Search(query)
+	// Sort by name for consistent results
+	sort.Slice(persons, func(i, j int) bool {
+		return index.FormatName(persons[i]) < index.FormatName(persons[j])
+	})
+	refs := make([]PersonRef, 0, len(persons))
+	for _, p := range persons {
+		refs = append(refs, PersonRef{ID: p.ID, Name: index.FormatName(p), Sex: p.Sex.String()})
+	}
+	writeJSON(w, http.StatusOK, refs)
+}

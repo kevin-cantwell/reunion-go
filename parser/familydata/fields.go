@@ -1,8 +1,11 @@
 package familydata
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/kevin-cantwell/reunion-go/internal/binutil"
 )
@@ -105,17 +108,130 @@ func ExtractPlaceRefs(data []byte) []int {
 	return refs
 }
 
-// ExtractString finds a printable string in the given data.
+// ExtractDate decodes a date from event sub-data.
+// Event data has an 18-byte fixed header, followed by sub-TLV fields.
+// The first sub-TLV (at offset 18) contains the date when its total length == 8.
+//
+// Year and quarter are encoded in bytes[24:25] as u16 LE:
+//
+//	totalQ = (year + 8000) * 4 + quarter
+//	quarter: 0=Q1(Jan-Mar), 1=Q2(Apr-Jun), 2=Q3(Jul-Sep), 3=Q4(Oct-Dec)
+//
+// Month within the quarter is encoded in the event header at bytes[2:3]:
+//
+//	u16LE(bytes[2:3]) % 3 maps via [0→1st, 1→3rd, 2→2nd] to month offset
+//
+// Day and qualifier are in bytes[22:23]:
+//
+//	byte[22]: precision flags (0x00=normal, 0xA0=approximate)
+//	byte[23]: day (bits 4-0, 0=unknown) + qualifier (bits 7-6: 0,1=exact, 2=after, 3=before)
+func ExtractDate(fieldData []byte) string {
+	if len(fieldData) < 26 {
+		return ""
+	}
+	// Sub-TLV at offset 18: date sub-TLV has exactly length 8 (4-byte header + 4-byte date)
+	subLen, err := binutil.U16LE(fieldData, 18)
+	if err != nil || subLen != 8 {
+		return ""
+	}
+
+	precFlags := fieldData[22]
+	dayByte := fieldData[23]
+	monthYearLo := fieldData[24]
+	monthYearHi := fieldData[25]
+
+	totalQ := int(monthYearHi)<<8 | int(monthYearLo)
+	year := totalQ/4 - 8000
+	quarter := totalQ % 4 // 0=Q1(Jan-Mar), 1=Q2(Apr-Jun), 2=Q3(Jul-Sep), 3=Q4(Oct-Dec)
+
+	// Month within quarter is encoded in the event header u16LE at bytes[2:3].
+	// The value mod 3 maps: 0→1st month, 1→3rd month, 2→2nd month of the quarter.
+	hdrVal, _ := binutil.U16LE(fieldData, 2)
+	monthOffsetTable := [3]int{0, 2, 1} // u16%3 → month offset (0-indexed within quarter)
+	monthInQuarter := monthOffsetTable[int(hdrVal)%3]
+	month := quarter*3 + monthInQuarter + 1
+
+	modCode := int(dayByte >> 6) // 0-3
+	day := int(dayByte & 0x1F)
+
+	if year < 1 || year > 9999 {
+		return ""
+	}
+
+	monthNames := [13]string{"", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+
+	prefix := ""
+	switch {
+	case precFlags == 0xA0:
+		prefix = "abt "
+	case modCode == 2:
+		prefix = "aft "
+	case modCode == 3:
+		prefix = "bef "
+	}
+
+	if day > 0 && day <= 31 {
+		return fmt.Sprintf("%s%d %s %d", prefix, day, monthNames[month], year)
+	}
+	return fmt.Sprintf("%s%s %d", prefix, monthNames[month], year)
+}
+
+// ExtractNoteRef extracts a note record ID from event sub-data.
+// Note-type events (tag < 0x03E8) may contain a sub-TLV at offset 18
+// with tag 0x0000 whose 4-byte data is the referenced note's record ID.
+// Returns 0 if no note reference is found.
+func ExtractNoteRef(fieldData []byte) uint32 {
+	pos := 18
+	for pos+4 <= len(fieldData) {
+		subLen, err := binutil.U16LE(fieldData, pos)
+		if err != nil || subLen < 4 {
+			break
+		}
+		subTag, err := binutil.U16LE(fieldData, pos+2)
+		if err != nil {
+			break
+		}
+		if pos+int(subLen) > len(fieldData) {
+			break
+		}
+		if subTag == 0x0000 && subLen == 8 {
+			id, err := binutil.U32LE(fieldData, pos+4)
+			if err == nil && id > 0 {
+				return id
+			}
+		}
+		pos += int(subLen)
+	}
+	return 0
+}
+
+// ExtractString finds the first run of printable characters (ASCII and valid
+// UTF-8) in data. It uses unicode/utf8.DecodeRune for correct multi-byte
+// handling, including rejection of overlong encodings and surrogates.
 func ExtractString(data []byte) string {
-	// Find the first run of printable bytes
 	start := -1
-	for i, b := range data {
-		if b >= 0x20 && b < 0x7F {
+	i := 0
+	for i < len(data) {
+		r, size := utf8.DecodeRune(data[i:])
+		if r == utf8.RuneError && size <= 1 {
+			// Invalid UTF-8 byte — string boundary
+			if start != -1 {
+				return string(data[start:i])
+			}
+			i++
+			continue
+		}
+		if r >= 0x20 && r != 0x7F && unicode.IsPrint(r) {
 			if start == -1 {
 				start = i
 			}
-		} else if start != -1 {
-			return string(data[start:i])
+			i += size
+		} else {
+			// Control char or non-printable — string boundary
+			if start != -1 {
+				return string(data[start:i])
+			}
+			i += size
 		}
 	}
 	if start != -1 {

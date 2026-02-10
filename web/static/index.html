@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reunion Explorer</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="/static/app.js"></script>
+</head>
+<body x-data="app()" x-init="init()">
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1 class="topbar-title">Reunion Explorer</h1>
+    </div>
+    <div class="topbar-search">
+      <div class="search-wrapper">
+        <input type="text" x-model="searchQuery" @input.debounce.300ms="liveSearch()"
+               @keydown.escape="searchResults=[];searchQuery=''"
+               placeholder="Search persons..." class="search-input">
+        <div class="search-dropdown" x-show="searchResults.length > 0" @click.outside="searchResults=[]">
+          <template x-for="p in searchResults" :key="p.id">
+            <a class="search-result" @click.prevent="navigate('person', p.id); searchResults=[]; searchQuery=''">
+              <span x-text="'#' + p.id"></span>
+              <span x-text="p.name"></span>
+              <span class="sex-badge" x-text="p.sex"></span>
+            </a>
+          </template>
+        </div>
+      </div>
+    </div>
+    <div class="topbar-stats" x-show="stats">
+      <span x-text="stats ? stats.persons + ' persons' : ''"></span> &middot;
+      <span x-text="stats ? stats.families + ' families' : ''"></span> &middot;
+      <span x-text="stats ? stats.places + ' places' : ''"></span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- Sidebar -->
+    <nav class="sidebar">
+      <a class="nav-link" :class="{ active: view === 'stats' }" @click.prevent="navigate('stats')" href="#">Statistics</a>
+      <a class="nav-link" :class="{ active: view === 'persons' }" @click.prevent="navigate('persons')" href="#">Persons</a>
+      <a class="nav-link" :class="{ active: view === 'families' }" @click.prevent="navigate('families')" href="#">Families</a>
+      <a class="nav-link" :class="{ active: view === 'places' }" @click.prevent="navigate('places')" href="#">Places</a>
+      <a class="nav-link" :class="{ active: view === 'events' }" @click.prevent="navigate('events')" href="#">Event Types</a>
+      <a class="nav-link" :class="{ active: view === 'sources' }" @click.prevent="navigate('sources')" href="#">Sources</a>
+      <hr>
+      <a class="nav-link" href="/api/openapi.json" target="_blank">API Spec (JSON)</a>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="content">
+
+      <!-- Loading -->
+      <div x-show="loading" class="loading">Loading...</div>
+
+      <!-- Statistics View -->
+      <div x-show="view === 'stats' && !loading">
+        <h2>Statistics</h2>
+        <div class="stats-grid" x-show="stats">
+          <div class="stat-card">
+            <div class="stat-value" x-text="stats?.persons || 0"></div>
+            <div class="stat-label">Persons</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" x-text="stats?.persons_named || 0"></div>
+            <div class="stat-label">Named</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" x-text="stats?.persons_male || 0"></div>
+            <div class="stat-label">Male</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" x-text="stats?.persons_female || 0"></div>
+            <div class="stat-label">Female</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" x-text="stats?.families || 0"></div>
+            <div class="stat-label">Families</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" x-text="stats?.families_with_partners || 0"></div>
+            <div class="stat-label">With Partners</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" x-text="stats?.families_with_children || 0"></div>
+            <div class="stat-label">With Children</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" x-text="stats?.places || 0"></div>
+            <div class="stat-label">Places</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" x-text="stats?.event_types || 0"></div>
+            <div class="stat-label">Event Types</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" x-text="stats?.sources || 0"></div>
+            <div class="stat-label">Sources</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" x-text="stats?.notes || 0"></div>
+            <div class="stat-label">Notes</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" x-text="stats?.media || 0"></div>
+            <div class="stat-label">Media</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Persons List -->
+      <div x-show="view === 'persons' && !loading">
+        <h2>Persons</h2>
+        <div class="filter-bar">
+          <input type="text" x-model="surnameFilter" @input.debounce.300ms="loadPersons()"
+                 placeholder="Filter by surname..." class="filter-input">
+          <span class="result-count" x-text="personsList.length + ' results'"></span>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Sex</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="p in personsList" :key="p.id">
+                <tr @click="navigate('person', p.id)" class="clickable">
+                  <td x-text="p.id"></td>
+                  <td x-text="p.name"></td>
+                  <td x-text="p.sex"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination" x-show="personsTotal > personsPerPage">
+          <button @click="personsPage--; loadPersons()" :disabled="personsPage <= 1">&laquo; Prev</button>
+          <span x-text="'Page ' + personsPage + ' of ' + Math.ceil(personsTotal / personsPerPage)"></span>
+          <button @click="personsPage++; loadPersons()" :disabled="personsPage >= Math.ceil(personsTotal / personsPerPage)">Next &raquo;</button>
+        </div>
+      </div>
+
+      <!-- Person Detail -->
+      <div x-show="view === 'person' && !loading && personDetail">
+        <h2>
+          <span x-text="personDetail?.name || ''"></span>
+          <span class="sex-badge large" x-text="personDetail?.sex_label || ''"></span>
+        </h2>
+        <div class="detail-id" x-text="'Person #' + (personDetail?.id || '')"></div>
+
+        <!-- Life Events -->
+        <div class="card" x-show="(personDetail?.resolved_events || []).filter(e => !e.is_note).length > 0">
+          <h3>Events</h3>
+          <table>
+            <thead><tr><th>Type</th><th>Date</th><th>Place</th></tr></thead>
+            <tbody>
+              <template x-for="evt in (personDetail?.resolved_events || []).filter(e => !e.is_note)" :key="evt.schema_id + '-' + evt.tag">
+                <tr>
+                  <td>
+                    <a href="#" @click.prevent="navigate('event', evt.schema_id)" x-text="evt.schema_name || ('Tag 0x' + evt.tag.toString(16))"></a>
+                  </td>
+                  <td x-text="evt.date || ''"></td>
+                  <td>
+                    <template x-for="pl in evt.places || []" :key="pl.id">
+                      <a href="#" @click.prevent="navigate('place', pl.id)" x-text="pl.name" class="place-link"></a>
+                    </template>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Notes -->
+        <div class="card" x-show="personDetail?.notes?.length > 0">
+          <h3>Notes</h3>
+          <template x-for="(note, idx) in personDetail?.notes || []" :key="note.id + '-' + idx">
+            <div style="margin-bottom: 1em;">
+              <div x-show="note.label" style="font-weight: 600; margin-bottom: 0.25em;" x-text="note.label"></div>
+              <div x-text="note.text" style="white-space: pre-wrap; padding: 0.75em; background: var(--bg-alt, #f8f8f8); border-radius: 4px; font-size: 0.9em; line-height: 1.5;"></div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Spouses -->
+        <div class="card" x-show="personDetail?.spouses?.length > 0">
+          <h3>Spouses</h3>
+          <ul class="person-list">
+            <template x-for="s in personDetail?.spouses || []" :key="s.id">
+              <li><a href="#" @click.prevent="navigate('person', s.id)" x-text="'#' + s.id + ' ' + s.name"></a></li>
+            </template>
+          </ul>
+        </div>
+
+        <!-- Children -->
+        <div class="card" x-show="personDetail?.children?.length > 0">
+          <h3>Children</h3>
+          <ul class="person-list">
+            <template x-for="c in personDetail?.children || []" :key="c.id">
+              <li><a href="#" @click.prevent="navigate('person', c.id)" x-text="'#' + c.id + ' ' + c.name"></a></li>
+            </template>
+          </ul>
+        </div>
+
+        <!-- Parents -->
+        <div class="card" x-show="personDetail?.parents?.length > 0">
+          <h3>Parents</h3>
+          <ul class="person-list">
+            <template x-for="pa in personDetail?.parents || []" :key="pa.id">
+              <li><a href="#" @click.prevent="navigate('person', pa.id)" x-text="'#' + pa.id + ' ' + pa.name"></a></li>
+            </template>
+          </ul>
+        </div>
+
+        <!-- Siblings -->
+        <div class="card" x-show="personDetail?.siblings?.length > 0">
+          <h3>Siblings</h3>
+          <ul class="person-list">
+            <template x-for="sib in personDetail?.siblings || []" :key="sib.id">
+              <li><a href="#" @click.prevent="navigate('person', sib.id)" x-text="'#' + sib.id + ' ' + sib.name"></a></li>
+            </template>
+          </ul>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+          <button @click="loadAncestors()" class="btn">Ancestors</button>
+          <button @click="loadDescendants()" class="btn">Descendants</button>
+          <button @click="loadTreetops()" class="btn">Treetops</button>
+          <button @click="loadSummary()" class="btn">Summary</button>
+        </div>
+
+        <!-- Ancestors (inline expandable) -->
+        <div class="card" x-show="ancestorsList.length > 0">
+          <h3>Ancestors <span class="count" x-text="'(' + ancestorsList.length + ')'"></span></h3>
+          <table>
+            <thead><tr><th>Gen</th><th>ID</th><th>Name</th><th>Sex</th></tr></thead>
+            <tbody>
+              <template x-for="a in ancestorsList" :key="a.person.id">
+                <tr @click="navigate('person', a.person.id)" class="clickable">
+                  <td x-text="a.generation"></td>
+                  <td x-text="a.person.id"></td>
+                  <td x-text="formatPersonName(a.person)"></td>
+                  <td x-text="sexLabel(a.person.sex)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Descendants (inline expandable) -->
+        <div class="card" x-show="descendantsList.length > 0">
+          <h3>Descendants <span class="count" x-text="'(' + descendantsList.length + ')'"></span></h3>
+          <table>
+            <thead><tr><th>Gen</th><th>ID</th><th>Name</th><th>Sex</th></tr></thead>
+            <tbody>
+              <template x-for="d in descendantsList" :key="d.person.id">
+                <tr @click="navigate('person', d.person.id)" class="clickable">
+                  <td x-text="d.generation"></td>
+                  <td x-text="d.person.id"></td>
+                  <td x-text="formatPersonName(d.person)"></td>
+                  <td x-text="sexLabel(d.person.sex)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Treetops (inline expandable) -->
+        <div class="card" x-show="treetopsList.length > 0">
+          <h3>Treetops <span class="count" x-text="'(' + treetopsList.length + ')'"></span></h3>
+          <ul class="person-list">
+            <template x-for="t in treetopsList" :key="t.id">
+              <li><a href="#" @click.prevent="navigate('person', t.id)" x-text="'#' + t.id + ' ' + t.name"></a></li>
+            </template>
+          </ul>
+        </div>
+
+        <!-- Summary (inline expandable) -->
+        <div class="card" x-show="summaryData">
+          <h3>Summary</h3>
+          <div class="summary-grid">
+            <div><strong>Spouses:</strong> <span x-text="summaryData?.spouses || 0"></span></div>
+            <div><strong>Siblings:</strong> <span x-text="summaryData?.siblings || 0"></span></div>
+            <div><strong>Ancestors:</strong> <span x-text="summaryData?.ancestors || 0"></span></div>
+            <div><strong>Descendants:</strong> <span x-text="summaryData?.descendants || 0"></span></div>
+            <div><strong>Treetops:</strong> <span x-text="summaryData?.treetops || 0"></span></div>
+          </div>
+          <div x-show="summaryData?.surnames" class="surname-table">
+            <h4>Ancestor Surnames</h4>
+            <table>
+              <thead><tr><th>Surname</th><th>Count</th></tr></thead>
+              <tbody>
+                <template x-for="[name, count] in Object.entries(summaryData?.surnames || {}).sort((a,b) => b[1]-a[1])">
+                  <tr>
+                    <td x-text="name"></td>
+                    <td x-text="count"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Families List -->
+      <div x-show="view === 'families' && !loading">
+        <h2>Families</h2>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Partner 1</th>
+                <th>Partner 2</th>
+                <th>Children</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="f in familiesList" :key="f.id">
+                <tr @click="navigate('family', f.id)" class="clickable">
+                  <td x-text="f.id"></td>
+                  <td x-text="f.partner1_name || '(unknown)'"></td>
+                  <td x-text="f.partner2_name || '(unknown)'"></td>
+                  <td x-text="f.children_count"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination" x-show="familiesTotal > familiesPerPage">
+          <button @click="familiesPage--; loadFamilies()" :disabled="familiesPage <= 1">&laquo; Prev</button>
+          <span x-text="'Page ' + familiesPage + ' of ' + Math.ceil(familiesTotal / familiesPerPage)"></span>
+          <button @click="familiesPage++; loadFamilies()" :disabled="familiesPage >= Math.ceil(familiesTotal / familiesPerPage)">Next &raquo;</button>
+        </div>
+      </div>
+
+      <!-- Family Detail -->
+      <div x-show="view === 'family' && !loading && familyDetail">
+        <h2 x-text="'Family #' + (familyDetail?.id || '')"></h2>
+        <div class="card">
+          <h3>Partners</h3>
+          <ul class="person-list">
+            <li x-show="familyDetail?.partner1_detail">
+              <a href="#" @click.prevent="navigate('person', familyDetail?.partner1_detail?.id)"
+                 x-text="'#' + familyDetail?.partner1_detail?.id + ' ' + familyDetail?.partner1_detail?.name"></a>
+            </li>
+            <li x-show="familyDetail?.partner2_detail">
+              <a href="#" @click.prevent="navigate('person', familyDetail?.partner2_detail?.id)"
+                 x-text="'#' + familyDetail?.partner2_detail?.id + ' ' + familyDetail?.partner2_detail?.name"></a>
+            </li>
+          </ul>
+        </div>
+        <div class="card" x-show="familyDetail?.children_detail?.length > 0">
+          <h3>Children</h3>
+          <ul class="person-list">
+            <template x-for="c in familyDetail?.children_detail || []" :key="c.id">
+              <li><a href="#" @click.prevent="navigate('person', c.id)" x-text="'#' + c.id + ' ' + c.name"></a></li>
+            </template>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Places List -->
+      <div x-show="view === 'places' && !loading">
+        <h2>Places</h2>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>ID</th><th>Name</th></tr></thead>
+            <tbody>
+              <template x-for="p in placesList" :key="p.id">
+                <tr @click="navigate('place', p.id)" class="clickable">
+                  <td x-text="p.id"></td>
+                  <td x-text="p.name"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Place Detail -->
+      <div x-show="view === 'place' && !loading && placeDetail">
+        <h2 x-text="placeDetail?.name || ''"></h2>
+        <div class="detail-id" x-text="'Place #' + (placeDetail?.id || '')"></div>
+        <div class="card">
+          <h3>Persons with events at this place</h3>
+          <ul class="person-list" x-show="placePersonsList.length > 0">
+            <template x-for="p in placePersonsList" :key="p.id">
+              <li><a href="#" @click.prevent="navigate('person', p.id)" x-text="'#' + p.id + ' ' + p.name"></a></li>
+            </template>
+          </ul>
+          <p x-show="placePersonsList.length === 0" class="empty">No persons found.</p>
+        </div>
+      </div>
+
+      <!-- Events List -->
+      <div x-show="view === 'events' && !loading">
+        <h2>Event Types</h2>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>ID</th><th>Name</th><th>GEDCOM</th></tr></thead>
+            <tbody>
+              <template x-for="e in eventsList" :key="e.id">
+                <tr @click="navigate('event', e.id)" class="clickable">
+                  <td x-text="e.id"></td>
+                  <td x-text="e.display_name"></td>
+                  <td x-text="e.gedcom_code || ''"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Event Detail -->
+      <div x-show="view === 'event' && !loading && eventDetail">
+        <h2 x-text="eventDetail?.display_name || ''"></h2>
+        <div class="detail-id" x-text="'Event Type #' + (eventDetail?.id || '')"></div>
+        <div class="card" x-show="eventDetail?.gedcom_code">
+          <p><strong>GEDCOM Code:</strong> <span x-text="eventDetail?.gedcom_code"></span></p>
+          <p x-show="eventDetail?.short_label"><strong>Short Label:</strong> <span x-text="eventDetail?.short_label"></span></p>
+          <p x-show="eventDetail?.sentence_form"><strong>Sentence Form:</strong> <span x-text="eventDetail?.sentence_form"></span></p>
+        </div>
+        <div class="card">
+          <h3>Persons with this event type</h3>
+          <ul class="person-list" x-show="eventPersonsList.length > 0">
+            <template x-for="p in eventPersonsList" :key="p.id">
+              <li><a href="#" @click.prevent="navigate('person', p.id)" x-text="'#' + p.id + ' ' + p.name"></a></li>
+            </template>
+          </ul>
+          <p x-show="eventPersonsList.length === 0" class="empty">No persons found.</p>
+        </div>
+      </div>
+
+      <!-- Sources List -->
+      <div x-show="view === 'sources' && !loading">
+        <h2>Sources</h2>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>ID</th><th>Title</th></tr></thead>
+            <tbody>
+              <template x-for="s in sourcesList" :key="s.id">
+                <tr>
+                  <td x-text="s.id"></td>
+                  <td x-text="s.title || '(untitled)'"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</body>
+</html>

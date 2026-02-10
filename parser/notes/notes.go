@@ -23,10 +23,12 @@ func ParseNoteFile(path string) (*model.Note, error) {
 	text := string(data)
 	base := filepath.Base(path)
 
+	markup := ParseMarkup(text)
 	note := &model.Note{
-		Filename: base,
-		RawText:  text,
-		Markup:   ParseMarkup(text),
+		Filename:    base,
+		RawText:     text,
+		Markup:      markup,
+		DisplayText: model.PlainText(markup),
 	}
 
 	// Extract person ID and event/source info from filename
