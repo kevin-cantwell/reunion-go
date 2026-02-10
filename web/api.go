@@ -256,10 +256,14 @@ func (s *Server) handlePerson(w http.ResponseWriter, r *http.Request) {
 			Text:  n.DisplayText,
 		})
 	}
-	// Also include file-based notes linked by PersonID
+	// Also include file-based notes linked by PersonID, skipping duplicates
+	seen := make(map[string]bool, len(notes))
+	for _, nd := range notes {
+		seen[nd.Text] = true
+	}
 	for i := range s.ff.Notes {
 		n := &s.ff.Notes[i]
-		if n.PersonID == int(p.ID) && n.DisplayText != "" {
+		if n.PersonID == int(p.ID) && n.DisplayText != "" && !seen[n.DisplayText] {
 			notes = append(notes, NoteDisplay{
 				ID:    n.ID,
 				Label: s.idx.SchemaName(uint16(n.SourceID)),

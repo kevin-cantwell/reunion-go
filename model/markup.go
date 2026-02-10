@@ -1,5 +1,7 @@
 package model
 
+import "strings"
+
 // MarkupNodeType classifies a node in parsed «» markup.
 type MarkupNodeType int
 
@@ -32,5 +34,21 @@ func PlainText(nodes []MarkupNode) string {
 			b = append(b, PlainText(n.Children)...)
 		}
 	}
-	return string(b)
+	s := string(b)
+	// Strip any remaining «...» markup sequences (unrecognized tags or
+	// incomplete tags left from truncated data).
+	for {
+		i := strings.Index(s, "\u00AB")
+		if i == -1 {
+			break
+		}
+		j := strings.Index(s[i:], "\u00BB")
+		if j == -1 {
+			// Trailing incomplete tag — remove from « onward
+			s = s[:i]
+			break
+		}
+		s = s[:i] + s[i+j+len("\u00BB"):]
+	}
+	return s
 }

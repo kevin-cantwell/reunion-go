@@ -123,8 +123,8 @@ func ExtractPlaceRefs(data []byte) []int {
 //
 // Day and qualifier are in bytes[22:23]:
 //
-//	byte[22]: precision flags (0x00=normal, 0xA0=approximate)
-//	byte[23]: day (bits 4-0, 0=unknown) + qualifier (bits 7-6: 0,1=exact, 2=after, 3=before)
+//	byte[22]: precision flags (0x00=normal, 0xA0=approximate, 0x40=after)
+//	byte[23]: day (bits 4-0, 0=unknown); bit 7 = day-present flag; bits 7-6 = 11 means "before"
 func ExtractDate(fieldData []byte) string {
 	if len(fieldData) < 26 {
 		return ""
@@ -151,7 +151,7 @@ func ExtractDate(fieldData []byte) string {
 	monthInQuarter := monthOffsetTable[int(hdrVal)%3]
 	month := quarter*3 + monthInQuarter + 1
 
-	modCode := int(dayByte >> 6) // 0-3
+	isBefore := dayByte&0xC0 == 0xC0 // bits 7-6 both set = "before"
 	day := int(dayByte & 0x1F)
 
 	if year < 1 || year > 9999 {
@@ -162,12 +162,12 @@ func ExtractDate(fieldData []byte) string {
 
 	prefix := ""
 	switch {
-	case precFlags == 0xA0:
-		prefix = "abt "
-	case modCode == 2:
-		prefix = "aft "
-	case modCode == 3:
-		prefix = "bef "
+	case precFlags == 0xA0 || precFlags == 0xE0:
+		prefix = "about "
+	case isBefore:
+		prefix = "before "
+	case precFlags == 0x40:
+		prefix = "after "
 	}
 
 	if day > 0 && day <= 31 {
