@@ -28,6 +28,8 @@ func buildOpenAPISpec() map[string]any {
 	schemaFromType(reflect.TypeOf(PersonRef{}), schemas)
 	schemaFromType(reflect.TypeOf(PersonDetail{}), schemas)
 	schemaFromType(reflect.TypeOf(ResolvedEvent{}), schemas)
+	schemaFromType(reflect.TypeOf(SourceCitationDisplay{}), schemas)
+	schemaFromType(reflect.TypeOf(NoteDisplay{}), schemas)
 	schemaFromType(reflect.TypeOf(TreeEntryRef{}), schemas)
 	schemaFromType(reflect.TypeOf(PlaceRef{}), schemas)
 	schemaFromType(reflect.TypeOf(FamilyRef{}), schemas)
@@ -80,8 +82,9 @@ func buildPaths() map[string]any {
 		"/api/events":            pathItem("get", "List event types", "array:EventDefinition"),
 		"/api/events/{id}":       pathItemWithID("get", "Get event type", "EventDefinition"),
 		"/api/events/{id}/persons": pathItemWithID("get", "Get persons with event type", "array:PersonRef"),
-		"/api/sources":           pathItem("get", "List sources", "array:Source"),
-		"/api/sources/{id}":      pathItemWithID("get", "Get source", "Source"),
+		"/api/sources":              pathItem("get", "List sources", "array:Source"),
+		"/api/sources/{id}":         pathItemWithID("get", "Get source", "Source"),
+		"/api/sources/{id}/persons": pathItemWithID("get", "Get persons citing source", "array:PersonRef"),
 		"/api/notes": pathItemWithParams("get", "List notes", "array:Note",
 			queryParam("person_id", "integer", "Filter by person ID"),
 		),

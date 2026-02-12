@@ -18,17 +18,30 @@ func ParseSource(rec RawRecord, ec *reunion.ErrorCollector) (*model.Source, erro
 
 	fields := ParseTLVFields(rec.Data)
 
+	// First pass: look for tag 0x0014 (display name) for the title
 	for _, f := range fields {
-		str := cleanString(f.Data)
-		if s.Title == "" && len(str) > 2 {
-			s.Title = str
+		if f.Tag == TagDisplayName {
+			str := cleanString(f.Data)
+			if len(str) > 0 {
+				s.Title = str
+			}
 		}
-
 		s.RawFields = append(s.RawFields, model.RawField{
 			Tag:  f.Tag,
 			Data: f.Data,
 			Size: uint16(len(f.Data) + 4),
 		})
+	}
+
+	// Fallback: if no 0x0014 tag, use first non-empty string
+	if s.Title == "" {
+		for _, f := range fields {
+			str := cleanString(f.Data)
+			if len(str) > 2 {
+				s.Title = str
+				break
+			}
+		}
 	}
 
 	return s, nil

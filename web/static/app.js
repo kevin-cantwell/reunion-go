@@ -40,6 +40,8 @@ function app() {
 
     // Sources
     sourcesList: [],
+    sourceDetail: null,
+    sourcePersonsList: [],
 
     async init() {
       // Load stats on init
@@ -89,6 +91,7 @@ function app() {
         case 'events': await this.loadEvents(); break;
         case 'event': await this.loadEventDetail(id); break;
         case 'sources': await this.loadSources(); break;
+        case 'source': await this.loadSourceDetail(id); break;
       }
     },
 
@@ -240,6 +243,13 @@ function app() {
     async loadSources() {
       this.loading = true;
       this.sourcesList = await this.api('/api/sources') || [];
+      this.loading = false;
+    },
+
+    async loadSourceDetail(id) {
+      this.loading = true;
+      this.sourceDetail = await this.api(`/api/sources/${id}`);
+      this.sourcePersonsList = await this.api(`/api/sources/${id}/persons`) || [];
       this.loading = false;
     },
   };

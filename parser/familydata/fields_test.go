@@ -240,3 +240,64 @@ func TestExtractNoteRef(t *testing.T) {
 		t.Errorf("ExtractNoteRef(short) = %d, want 0", got3)
 	}
 }
+
+func TestExtractSourceCitations(t *testing.T) {
+	// Build citation data:
+	//   [innerLength u32LE][count u32LE]
+	//   per entry: [entryLength u16LE][unknown u16LE][sourceID u32LE][detail...]
+
+	// Entry 1: sourceID=6, detail="page 274"
+	detail1 := []byte("page 274")
+	entry1Len := uint16(8 + len(detail1))
+	entry1 := make([]byte, entry1Len)
+	putU16LE(entry1, 0, entry1Len)
+	putU16LE(entry1, 2, 0x0000) // unknown
+	putU32LE(entry1, 4, 6)
+	copy(entry1[8:], detail1)
+
+	// Entry 2: sourceID=1, detail="" (no detail)
+	entry2 := make([]byte, 8)
+	putU16LE(entry2, 0, 8)
+	putU16LE(entry2, 2, 0x0000)
+	putU32LE(entry2, 4, 1)
+
+	innerLen := uint32(8 + len(entry1) + len(entry2))
+	data := make([]byte, 8)
+	putU32LE(data, 0, innerLen)
+	putU32LE(data, 4, 2) // count=2
+	data = append(data, entry1...)
+	data = append(data, entry2...)
+
+	cites := ExtractSourceCitations(data)
+	if len(cites) != 2 {
+		t.Fatalf("expected 2 citations, got %d", len(cites))
+	}
+	if cites[0].SourceID != 6 {
+		t.Errorf("cites[0].SourceID = %d, want 6", cites[0].SourceID)
+	}
+	if cites[0].Detail != "page 274" {
+		t.Errorf("cites[0].Detail = %q, want %q", cites[0].Detail, "page 274")
+	}
+	if cites[1].SourceID != 1 {
+		t.Errorf("cites[1].SourceID = %d, want 1", cites[1].SourceID)
+	}
+	if cites[1].Detail != "" {
+		t.Errorf("cites[1].Detail = %q, want empty", cites[1].Detail)
+	}
+
+	// Too short
+	if got := ExtractSourceCitations(nil); got != nil {
+		t.Errorf("expected nil for nil data, got %v", got)
+	}
+	if got := ExtractSourceCitations(make([]byte, 4)); got != nil {
+		t.Errorf("expected nil for short data, got %v", got)
+	}
+
+	// Zero count
+	zeroData := make([]byte, 8)
+	putU32LE(zeroData, 0, 8)
+	putU32LE(zeroData, 4, 0)
+	if got := ExtractSourceCitations(zeroData); got != nil {
+		t.Errorf("expected nil for zero count, got %v", got)
+	}
+}

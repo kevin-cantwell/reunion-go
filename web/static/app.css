@@ -394,6 +394,48 @@ tr.clickable:hover {
   font-size: 14px;
 }
 
+/* Source Citations */
+.source-cite-group {
+  font-size: 0.7em;
+  margin-left: 2px;
+  vertical-align: super;
+}
+
+.source-cite-group a {
+  color: #e67e22;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.source-cite-group a:hover {
+  text-decoration: underline;
+  color: #d35400;
+}
+
+.cite-sep {
+  margin: 0 1px;
+  color: #bbb;
+}
+
+/* Note Text */
+.note-text {
+  white-space: pre-wrap;
+  padding: 0.75em;
+  background: var(--bg-alt, #f8f8f8);
+  border-radius: 4px;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+.note-text a {
+  color: #2980b9;
+  text-decoration: none;
+}
+
+.note-text a:hover {
+  text-decoration: underline;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .sidebar {

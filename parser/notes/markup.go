@@ -118,6 +118,10 @@ func (p *markupParser) parseTag(tag string, depth int) *model.MarkupNode {
 		value := strings.TrimPrefix(tag, "url=")
 		children := p.parseUntil("url", depth+1)
 		return &model.MarkupNode{Type: model.MarkupURL, Value: value, Children: children}
+	case strings.HasPrefix(tag, "s="):
+		value := strings.TrimPrefix(tag, "s=")
+		children := p.parseUntil("s", depth+1)
+		return &model.MarkupNode{Type: model.MarkupSourceCitation, Value: value, Children: children}
 	default:
 		// Unknown tag, treat as text
 		return &model.MarkupNode{

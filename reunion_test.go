@@ -89,6 +89,44 @@ func TestOpen(t *testing.T) {
 		t.Errorf("JFK Sex = %d, want SexMale (%d)", jfk.Sex, model.SexMale)
 	}
 
+	// JFK person-level source citations (name citations from tag 0x0020)
+	if len(jfk.SourceCitations) != 2 {
+		t.Errorf("JFK SourceCitations count = %d, want 2", len(jfk.SourceCitations))
+	} else {
+		if jfk.SourceCitations[0].SourceID != 6 {
+			t.Errorf("JFK SourceCitations[0].SourceID = %d, want 6", jfk.SourceCitations[0].SourceID)
+		}
+		if jfk.SourceCitations[1].SourceID != 1 {
+			t.Errorf("JFK SourceCitations[1].SourceID = %d, want 1", jfk.SourceCitations[1].SourceID)
+		}
+	}
+
+	// JFK birth event (tag 0x03E8) source citation
+	var birthEvt *model.PersonEvent
+	for i := range jfk.Events {
+		if jfk.Events[i].Tag == 0x03E8 {
+			birthEvt = &jfk.Events[i]
+			break
+		}
+	}
+	if birthEvt == nil {
+		t.Error("JFK birth event (tag 0x03E8) not found")
+	} else if len(birthEvt.SourceCitations) < 1 {
+		t.Errorf("JFK birth event has %d source citations, want >= 1", len(birthEvt.SourceCitations))
+	} else if birthEvt.SourceCitations[0].SourceID != 6 {
+		t.Errorf("JFK birth citation sourceID = %d, want 6", birthEvt.SourceCitations[0].SourceID)
+	}
+
+	// Source titles should be clean (using tag 0x0014)
+	for _, src := range ff.Sources {
+		for _, r := range src.Title {
+			if r < 0x20 && r != '\t' && r != '\n' && r != '\r' {
+				t.Errorf("Source %d title contains control char U+%04X: %q", src.ID, r, src.Title)
+				break
+			}
+		}
+	}
+
 	// JSON round-trip
 	jsonData, err := ff.ToJSON()
 	if err != nil {

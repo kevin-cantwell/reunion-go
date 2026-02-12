@@ -13,6 +13,7 @@ const (
 	MarkupFontFlag                        // «ff=N»...«/ff»
 	MarkupColor                           // «c=RRGGBBAA»...«/c»
 	MarkupURL                             // «url=URL»...«/url»
+	MarkupSourceCitation                  // «s=N»...«/s»
 )
 
 // MarkupNode represents a node in the parsed markup tree.

@@ -118,6 +118,29 @@ func TestParseMarkup_Color(t *testing.T) {
 	}
 }
 
+func TestParseMarkup_SourceCitation(t *testing.T) {
+	// «s=7»cited text«/s»
+	nodes := ParseMarkup("before\u00ABs=7\u00BBcited text\u00AB/s\u00BBafter")
+	if len(nodes) != 3 {
+		t.Fatalf("expected 3 nodes, got %d", len(nodes))
+	}
+	if nodes[0].Type != model.MarkupText || nodes[0].Text != "before" {
+		t.Errorf("node[0] = %+v, want text 'before'", nodes[0])
+	}
+	if nodes[1].Type != model.MarkupSourceCitation {
+		t.Errorf("node[1] type = %d, want MarkupSourceCitation", nodes[1].Type)
+	}
+	if nodes[1].Value != "7" {
+		t.Errorf("node[1] value = %q, want %q", nodes[1].Value, "7")
+	}
+	if len(nodes[1].Children) != 1 || nodes[1].Children[0].Text != "cited text" {
+		t.Errorf("source citation children = %+v, want 'cited text'", nodes[1].Children)
+	}
+	if nodes[2].Type != model.MarkupText || nodes[2].Text != "after" {
+		t.Errorf("node[2] = %+v, want text 'after'", nodes[2])
+	}
+}
+
 func TestPlainText(t *testing.T) {
 	tests := []struct {
 		name  string
