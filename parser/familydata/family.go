@@ -66,11 +66,13 @@ func ParseFamily(rec RawRecord, ec *reunion.ErrorCollector) (*model.Family, erro
 			}
 		case isFamilyEventTag(field.Tag):
 			evt := model.FamilyEvent{
-				Tag:       field.Tag,
-				PlaceRefs: ExtractPlaceRefs(field.Data),
-				RawData:   field.Data,
-				SchemaID:  ParseEventField(field.Data),
-				Date:      ExtractDate(field.Data),
+				Tag:             field.Tag,
+				PlaceRefs:       ExtractPlaceRefs(field.Data),
+				RawData:         field.Data,
+				SchemaID:        ParseEventField(field.Data),
+				Date:            ExtractDate(field.Data),
+				Text:            ExtractEventText(field.Data),
+				SourceCitations: ExtractEventSourceCitations(field.Data),
 			}
 			f.Events = append(f.Events, evt)
 		default:

@@ -151,16 +151,21 @@
         <h2>
           <span x-text="personDetail?.name || ''"></span>
           <span class="sex-badge large" x-text="personDetail?.sex_label || ''"></span>
+          <sup class="source-cite-group" x-show="(personDetail?.source_citations || []).length > 0">
+            <template x-for="(sc, i) in personDetail?.source_citations || []" :key="sc.source_id">
+              <span><span x-show="i > 0" class="cite-sep">&middot;</span><a href="#" @click.prevent="navigate('source', sc.source_id)" :title="sc.source_title + (sc.detail ? ' — ' + sc.detail : '')" x-text="sc.source_id"></a></span>
+            </template>
+          </sup>
         </h2>
         <div class="detail-id" x-text="'Person #' + (personDetail?.id || '')"></div>
 
         <!-- Life Events -->
-        <div class="card" x-show="(personDetail?.resolved_events || []).filter(e => !e.is_note).length > 0">
+        <div class="card" x-show="(personDetail?.resolved_events || []).filter(e => !e.is_note && !e.is_fact).length > 0">
           <h3>Events</h3>
           <table>
-            <thead><tr><th>Type</th><th>Date</th><th>Place</th></tr></thead>
+            <thead><tr><th>Type</th><th>Date</th><th>Place</th><th>Sources</th></tr></thead>
             <tbody>
-              <template x-for="evt in (personDetail?.resolved_events || []).filter(e => !e.is_note)" :key="evt.schema_id + '-' + evt.tag">
+              <template x-for="evt in (personDetail?.resolved_events || []).filter(e => !e.is_note && !e.is_fact)" :key="evt.schema_id + '-' + evt.tag">
                 <tr>
                   <td>
                     <a href="#" @click.prevent="navigate('event', evt.schema_id)" x-text="evt.schema_name || ('Tag 0x' + evt.tag.toString(16))"></a>
@@ -170,6 +175,44 @@
                     <template x-for="pl in evt.places || []" :key="pl.id">
                       <a href="#" @click.prevent="navigate('place', pl.id)" x-text="pl.name" class="place-link"></a>
                     </template>
+                  </td>
+                  <td>
+                    <sup class="source-cite-group" x-show="(evt.source_citations || []).length > 0">
+                      <template x-for="(sc, i) in evt.source_citations || []" :key="sc.source_id">
+                        <span><span x-show="i > 0" class="cite-sep">&middot;</span><a href="#" @click.prevent="navigate('source', sc.source_id)" :title="sc.source_title + (sc.detail ? ' — ' + sc.detail : '')" x-text="sc.source_id"></a></span>
+                      </template>
+                    </sup>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Facts -->
+        <div class="card" x-show="(personDetail?.resolved_events || []).filter(e => e.is_fact).length > 0">
+          <h3>Facts</h3>
+          <table>
+            <thead><tr><th>Fact</th><th>Value</th><th>Date</th><th>Place</th><th>Sources</th></tr></thead>
+            <tbody>
+              <template x-for="evt in (personDetail?.resolved_events || []).filter(e => e.is_fact)" :key="evt.schema_id + '-' + evt.tag">
+                <tr>
+                  <td>
+                    <a href="#" @click.prevent="navigate('event', evt.schema_id)" x-text="evt.schema_name || ('Tag 0x' + evt.tag.toString(16))"></a>
+                  </td>
+                  <td x-text="evt.text || ''"></td>
+                  <td x-text="evt.date || ''"></td>
+                  <td>
+                    <template x-for="pl in evt.places || []" :key="pl.id">
+                      <a href="#" @click.prevent="navigate('place', pl.id)" x-text="pl.name" class="place-link"></a>
+                    </template>
+                  </td>
+                  <td>
+                    <sup class="source-cite-group" x-show="(evt.source_citations || []).length > 0">
+                      <template x-for="(sc, i) in evt.source_citations || []" :key="sc.source_id">
+                        <span><span x-show="i > 0" class="cite-sep">&middot;</span><a href="#" @click.prevent="navigate('source', sc.source_id)" :title="sc.source_title + (sc.detail ? ' — ' + sc.detail : '')" x-text="sc.source_id"></a></span>
+                      </template>
+                    </sup>
                   </td>
                 </tr>
               </template>
@@ -183,7 +226,8 @@
           <template x-for="(note, idx) in personDetail?.notes || []" :key="note.id + '-' + idx">
             <div style="margin-bottom: 1em;">
               <div x-show="note.label" style="font-weight: 600; margin-bottom: 0.25em;" x-text="note.label"></div>
-              <div x-text="note.text" style="white-space: pre-wrap; padding: 0.75em; background: var(--bg-alt, #f8f8f8); border-radius: 4px; font-size: 0.9em; line-height: 1.5;"></div>
+              <div x-show="note.html" x-html="note.html" class="note-text"></div>
+              <div x-show="!note.html" x-text="note.text" class="note-text"></div>
             </div>
           </template>
         </div>
@@ -447,13 +491,28 @@
             <thead><tr><th>ID</th><th>Title</th></tr></thead>
             <tbody>
               <template x-for="s in sourcesList" :key="s.id">
-                <tr>
+                <tr @click="navigate('source', s.id)" class="clickable">
                   <td x-text="s.id"></td>
                   <td x-text="s.title || '(untitled)'"></td>
                 </tr>
               </template>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Source Detail -->
+      <div x-show="view === 'source' && !loading && sourceDetail">
+        <h2 x-text="sourceDetail?.title || '(untitled)'"></h2>
+        <div class="detail-id" x-text="'Source #' + (sourceDetail?.id || '')"></div>
+        <div class="card">
+          <h3>Persons citing this source</h3>
+          <ul class="person-list" x-show="sourcePersonsList.length > 0">
+            <template x-for="p in sourcePersonsList" :key="p.id">
+              <li><a href="#" @click.prevent="navigate('person', p.id)" x-text="'#' + p.id + ' ' + p.name"></a></li>
+            </template>
+          </ul>
+          <p x-show="sourcePersonsList.length === 0" class="empty">No persons found.</p>
         </div>
       </div>
 

@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 	"sort"
 	"strings"
@@ -27,30 +28,41 @@ type TreeEntryRef struct {
 	Sex        string `json:"sex"`
 }
 
+// SourceCitationDisplay is a resolved source citation for display.
+type SourceCitationDisplay struct {
+	SourceID    uint32 `json:"source_id"`
+	SourceTitle string `json:"source_title,omitempty"`
+	Detail      string `json:"detail,omitempty"`
+}
+
 // PersonDetail is a full person record with resolved relationships.
 type PersonDetail struct {
-	ID             uint32          `json:"id"`
-	GivenName      string          `json:"given_name,omitempty"`
-	Surname        string          `json:"surname,omitempty"`
-	Name           string          `json:"name"`
-	Sex            int             `json:"sex"`
-	SexLabel       string          `json:"sex_label"`
-	ResolvedEvents []ResolvedEvent `json:"resolved_events,omitempty"`
-	Notes          []NoteDisplay   `json:"notes,omitempty"`
-	Spouses        []PersonRef     `json:"spouses,omitempty"`
-	Children       []PersonRef     `json:"children,omitempty"`
-	Parents        []PersonRef     `json:"parents,omitempty"`
-	Siblings       []PersonRef     `json:"siblings,omitempty"`
+	ID              uint32                  `json:"id"`
+	GivenName       string                  `json:"given_name,omitempty"`
+	Surname         string                  `json:"surname,omitempty"`
+	Name            string                  `json:"name"`
+	Sex             int                     `json:"sex"`
+	SexLabel        string                  `json:"sex_label"`
+	SourceCitations []SourceCitationDisplay  `json:"source_citations,omitempty"`
+	ResolvedEvents  []ResolvedEvent         `json:"resolved_events,omitempty"`
+	Notes           []NoteDisplay           `json:"notes,omitempty"`
+	Spouses         []PersonRef             `json:"spouses,omitempty"`
+	Children        []PersonRef             `json:"children,omitempty"`
+	Parents         []PersonRef             `json:"parents,omitempty"`
+	Siblings        []PersonRef             `json:"siblings,omitempty"`
 }
 
 // ResolvedEvent is a person event with resolved schema and place names.
 type ResolvedEvent struct {
-	SchemaID   uint16     `json:"schema_id"`
-	SchemaName string     `json:"schema_name,omitempty"`
-	Tag        uint16     `json:"tag"`
-	Date       string     `json:"date,omitempty"`
-	Places     []PlaceRef `json:"places,omitempty"`
-	IsNote     bool       `json:"is_note,omitempty"`
+	SchemaID        uint16                  `json:"schema_id"`
+	SchemaName      string                  `json:"schema_name,omitempty"`
+	Tag             uint16                  `json:"tag"`
+	Date            string                  `json:"date,omitempty"`
+	Text            string                  `json:"text,omitempty"`
+	Places          []PlaceRef              `json:"places,omitempty"`
+	SourceCitations []SourceCitationDisplay  `json:"source_citations,omitempty"`
+	IsNote          bool                    `json:"is_note,omitempty"`
+	IsFact          bool                    `json:"is_fact,omitempty"`
 }
 
 // PlaceRef is a lightweight place reference.
@@ -64,6 +76,7 @@ type NoteDisplay struct {
 	ID    uint32 `json:"id"`
 	Label string `json:"label,omitempty"`
 	Text  string `json:"text"`
+	HTML  string `json:"html,omitempty"`
 }
 
 // FamilyRef is a lightweight family reference for lists.
@@ -138,15 +151,37 @@ func (s *Server) personRefs(ids []uint32) []PersonRef {
 	return refs
 }
 
+func (s *Server) resolveSourceCitations(cites []model.SourceCitation) []SourceCitationDisplay {
+	if len(cites) == 0 {
+		return nil
+	}
+	out := make([]SourceCitationDisplay, 0, len(cites))
+	for _, c := range cites {
+		title := ""
+		if src, ok := s.idx.Sources[c.SourceID]; ok {
+			title = src.Title
+		}
+		out = append(out, SourceCitationDisplay{
+			SourceID:    c.SourceID,
+			SourceTitle: title,
+			Detail:      c.Detail,
+		})
+	}
+	return out
+}
+
 func (s *Server) resolveEvents(events []model.PersonEvent) []ResolvedEvent {
 	resolved := make([]ResolvedEvent, 0, len(events))
 	for _, evt := range events {
 		re := ResolvedEvent{
-			SchemaID:   evt.SchemaID,
-			SchemaName: s.idx.SchemaName(evt.SchemaID),
-			Tag:        evt.Tag,
-			Date:       evt.Date,
-			IsNote:     evt.Tag < 0x03E8, // tags below 1000 are note references
+			SchemaID:        evt.SchemaID,
+			SchemaName:      s.idx.SchemaName(evt.SchemaID),
+			Tag:             evt.Tag,
+			Date:            evt.Date,
+			Text:            evt.Text,
+			SourceCitations: s.resolveSourceCitations(evt.SourceCitations),
+			IsNote:          evt.Tag < 0x03E8, // tags below 1000 are note references
+			IsFact:          evt.Tag >= 0x0BB8,
 		}
 		for _, placeRef := range evt.PlaceRefs {
 			pid := uint32(placeRef)
@@ -156,6 +191,61 @@ func (s *Server) resolveEvents(events []model.PersonEvent) []ResolvedEvent {
 		resolved = append(resolved, re)
 	}
 	return resolved
+}
+
+// renderMarkupHTML converts markup nodes to an HTML string.
+func (s *Server) renderMarkupHTML(nodes []model.MarkupNode) string {
+	var b strings.Builder
+	for _, n := range nodes {
+		switch n.Type {
+		case model.MarkupText:
+			b.WriteString(html.EscapeString(n.Text))
+		case model.MarkupBold:
+			b.WriteString("<strong>")
+			b.WriteString(s.renderMarkupHTML(n.Children))
+			b.WriteString("</strong>")
+		case model.MarkupItalic:
+			b.WriteString("<em>")
+			b.WriteString(s.renderMarkupHTML(n.Children))
+			b.WriteString("</em>")
+		case model.MarkupUnderline:
+			b.WriteString("<u>")
+			b.WriteString(s.renderMarkupHTML(n.Children))
+			b.WriteString("</u>")
+		case model.MarkupURL:
+			b.WriteString(`<a href="`)
+			b.WriteString(html.EscapeString(n.Value))
+			b.WriteString(`" target="_blank" rel="noopener">`)
+			b.WriteString(s.renderMarkupHTML(n.Children))
+			b.WriteString("</a>")
+		case model.MarkupSourceCitation:
+			title := "Source " + n.Value
+			if src, ok := s.idx.Sources[parseUint32(n.Value)]; ok && src.Title != "" {
+				title = src.Title
+			}
+			b.WriteString(`<sup class="source-cite-group" title="`)
+			b.WriteString(html.EscapeString(title))
+			b.WriteString(`"><a href="#source/`)
+			b.WriteString(html.EscapeString(n.Value))
+			b.WriteString(`">`)
+			b.WriteString(html.EscapeString(n.Value))
+			b.WriteString("</a></sup>")
+		default:
+			// MarkupFontFlag, MarkupColor, etc. — render children only
+			b.WriteString(s.renderMarkupHTML(n.Children))
+		}
+	}
+	return b.String()
+}
+
+func parseUint32(s string) uint32 {
+	var v uint32
+	for _, c := range s {
+		if c >= '0' && c <= '9' {
+			v = v*10 + uint32(c-'0')
+		}
+	}
+	return v
 }
 
 // --- Handlers ---
@@ -258,11 +348,15 @@ func (s *Server) handlePerson(w http.ResponseWriter, r *http.Request) {
 		if !ok || n.DisplayText == "" {
 			continue
 		}
-		notes = append(notes, NoteDisplay{
+		nd := NoteDisplay{
 			ID:    n.ID,
 			Label: s.idx.SchemaName(ref.SchemaID),
 			Text:  n.DisplayText,
-		})
+		}
+		if len(n.Markup) > 0 {
+			nd.HTML = s.renderMarkupHTML(n.Markup)
+		}
+		notes = append(notes, nd)
 	}
 	// Also include file-based notes linked by PersonID, skipping duplicates
 	seen := make(map[string]bool, len(notes))
@@ -272,27 +366,32 @@ func (s *Server) handlePerson(w http.ResponseWriter, r *http.Request) {
 	for i := range s.ff.Notes {
 		n := &s.ff.Notes[i]
 		if n.PersonID == int(p.ID) && n.DisplayText != "" && !seen[n.DisplayText] {
-			notes = append(notes, NoteDisplay{
+			nd := NoteDisplay{
 				ID:    n.ID,
 				Label: s.idx.SchemaName(uint16(n.SourceID)),
 				Text:  n.DisplayText,
-			})
+			}
+			if len(n.Markup) > 0 {
+				nd.HTML = s.renderMarkupHTML(n.Markup)
+			}
+			notes = append(notes, nd)
 		}
 	}
 
 	detail := PersonDetail{
-		ID:             p.ID,
-		GivenName:      p.GivenName,
-		Surname:        p.Surname,
-		Name:           index.FormatName(p),
-		Sex:            int(p.Sex),
-		SexLabel:       p.Sex.String(),
-		ResolvedEvents: s.resolveEvents(p.Events),
-		Notes:          notes,
-		Spouses:        s.personRefs(s.idx.Spouses(p.ID)),
-		Children:       s.personRefs(s.idx.ChildrenOf(p.ID)),
-		Parents:        s.personRefs(s.idx.Parents(p.ID)),
-		Siblings:       s.personRefs(s.idx.Siblings(p.ID)),
+		ID:              p.ID,
+		GivenName:       p.GivenName,
+		Surname:         p.Surname,
+		Name:            index.FormatName(p),
+		Sex:             int(p.Sex),
+		SexLabel:        p.Sex.String(),
+		SourceCitations: s.resolveSourceCitations(p.SourceCitations),
+		ResolvedEvents:  s.resolveEvents(p.Events),
+		Notes:           notes,
+		Spouses:         s.personRefs(s.idx.Spouses(p.ID)),
+		Children:        s.personRefs(s.idx.ChildrenOf(p.ID)),
+		Parents:         s.personRefs(s.idx.Parents(p.ID)),
+		Siblings:        s.personRefs(s.idx.Siblings(p.ID)),
 	}
 
 	writeJSON(w, http.StatusOK, detail)
@@ -575,6 +674,49 @@ func (s *Server) handleSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, src)
+}
+
+func (s *Server) handleSourcePersons(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, ok := s.idx.Sources[id]; !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("source %d not found", id))
+		return
+	}
+	// Find all persons that cite this source (person-level or event-level)
+	var refs []PersonRef
+	seen := make(map[uint32]bool)
+	for i := range s.ff.Persons {
+		p := &s.ff.Persons[i]
+		found := false
+		for _, sc := range p.SourceCitations {
+			if sc.SourceID == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			for _, evt := range p.Events {
+				for _, sc := range evt.SourceCitations {
+					if sc.SourceID == id {
+						found = true
+						break
+					}
+				}
+				if found {
+					break
+				}
+			}
+		}
+		if found && !seen[p.ID] {
+			seen[p.ID] = true
+			refs = append(refs, PersonRef{ID: p.ID, Name: index.FormatName(p), Sex: p.Sex.String()})
+		}
+	}
+	writeJSON(w, http.StatusOK, refs)
 }
 
 func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {

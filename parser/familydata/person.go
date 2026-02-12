@@ -8,10 +8,11 @@ import (
 
 // Tag constants for person record fields.
 const (
-	TagGivenName uint16 = 0x001E
-	TagSurname1  uint16 = 0x000C
-	TagSurname2  uint16 = 0x0023
-	TagSexFlags  uint16 = 0x001B
+	TagGivenName        uint16 = 0x001E
+	TagSurname1         uint16 = 0x000C
+	TagSurname2         uint16 = 0x0023
+	TagSexFlags         uint16 = 0x001B
+	TagNameSourceCiting uint16 = 0x0020
 )
 
 // ParsePerson parses a 0x20C4 person record into a Person model.
@@ -44,14 +45,20 @@ func ParsePerson(rec RawRecord, ec *reunion.ErrorCollector) (*model.Person, erro
 					p.Sex = model.SexFemale
 				}
 			}
+		case TagNameSourceCiting:
+			if cites := ExtractSourceCitations(f.Data); len(cites) > 0 {
+				p.SourceCitations = append(p.SourceCitations, cites...)
+			}
 		default:
 			if isEventTag(f.Tag) {
 				evt := model.PersonEvent{
-					Tag:       f.Tag,
-					PlaceRefs: ExtractPlaceRefs(f.Data),
-					RawData:   f.Data,
-					SchemaID:  ParseEventField(f.Data),
-					Date:      ExtractDate(f.Data),
+					Tag:             f.Tag,
+					PlaceRefs:       ExtractPlaceRefs(f.Data),
+					RawData:         f.Data,
+					SchemaID:        ParseEventField(f.Data),
+					Date:            ExtractDate(f.Data),
+					Text:            ExtractEventText(f.Data),
+					SourceCitations: ExtractEventSourceCitations(f.Data),
 				}
 				p.Events = append(p.Events, evt)
 

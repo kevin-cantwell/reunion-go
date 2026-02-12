@@ -1,13 +1,16 @@
 package familydata
 
 import (
+	"bytes"
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/kevin-cantwell/reunion-go/internal/binutil"
+	"github.com/kevin-cantwell/reunion-go/model"
 )
 
 // placeRefPattern matches [[pt:NNN]] place references in event data.
@@ -214,6 +217,114 @@ func ExtractNoteRef(fieldData []byte) uint32 {
 		pos += int(subLen)
 	}
 	return 0
+}
+
+// ExtractSourceCitations decodes the binary citation format:
+//
+//	Offset  Size   Description
+//	0       4      innerLength (u32LE)
+//	4       4      citationCount (u32LE)
+//	Per entry:
+//	  0     2      entryLength (u16LE, includes this field)
+//	  2     2      unknown/hash (skip)
+//	  4     4      sourceRecordID (u32LE)
+//	  8     N      detail text (entryLength - 8 bytes), stripped of nulls
+func ExtractSourceCitations(data []byte) []model.SourceCitation {
+	if len(data) < 8 {
+		return nil
+	}
+	_, err := binutil.U32LE(data, 0) // innerLength
+	if err != nil {
+		return nil
+	}
+	count, err := binutil.U32LE(data, 4)
+	if err != nil || count == 0 {
+		return nil
+	}
+
+	var citations []model.SourceCitation
+	pos := 8
+	for i := uint32(0); i < count && pos+8 <= len(data); i++ {
+		entryLen, err := binutil.U16LE(data, pos)
+		if err != nil || entryLen < 8 {
+			break
+		}
+		if pos+int(entryLen) > len(data) {
+			break
+		}
+		sourceID, err := binutil.U32LE(data, pos+4)
+		if err != nil {
+			break
+		}
+		detail := ""
+		if entryLen > 8 {
+			detailBytes := data[pos+8 : pos+int(entryLen)]
+			detailBytes = bytes.ReplaceAll(detailBytes, []byte{0}, nil)
+			detail = string(detailBytes)
+		}
+		citations = append(citations, model.SourceCitation{
+			SourceID: sourceID,
+			Detail:   detail,
+		})
+		pos += int(entryLen)
+	}
+	return citations
+}
+
+// ExtractEventSourceCitations walks the sub-TLVs at offset 18 in event data
+// and passes the last sub-TLV's data to ExtractSourceCitations.
+func ExtractEventSourceCitations(fieldData []byte) []model.SourceCitation {
+	pos := 18
+	lastData := []byte(nil)
+	for pos+4 <= len(fieldData) {
+		subLen, err := binutil.U16LE(fieldData, pos)
+		if err != nil || subLen < 4 {
+			break
+		}
+		if pos+int(subLen) > len(fieldData) {
+			break
+		}
+		lastData = fieldData[pos+4 : pos+int(subLen)]
+		pos += int(subLen)
+	}
+	if lastData == nil {
+		return nil
+	}
+	return ExtractSourceCitations(lastData)
+}
+
+// ExtractEventText walks sub-TLVs at offset 18 in event field data and returns
+// the first text sub-TLV (tag 0x0000, length > 8, contains printable text).
+// It strips [[pt:NNN]] place-ref markers from the result.
+func ExtractEventText(fieldData []byte) string {
+	pos := 18
+	for pos+4 <= len(fieldData) {
+		subLen, err := binutil.U16LE(fieldData, pos)
+		if err != nil || subLen < 4 {
+			break
+		}
+		subTag, err := binutil.U16LE(fieldData, pos+2)
+		if err != nil {
+			break
+		}
+		if pos+int(subLen) > len(fieldData) {
+			break
+		}
+		// Skip date sub-TLVs (length == 8) and non-zero tags
+		if subTag == 0x0000 && subLen > 8 {
+			raw := fieldData[pos+4 : pos+int(subLen)]
+			// Strip null bytes
+			raw = bytes.ReplaceAll(raw, []byte{0}, nil)
+			// Strip [[pt:NNN]] place references
+			text := placeRefPattern.ReplaceAllString(string(raw), "")
+			text = strings.TrimSpace(text)
+			if text != "" {
+				return text
+			}
+		}
+		pos += int(subLen)
+	}
+	return ""
 }
 
 // ExtractString finds the first run of printable characters (ASCII and valid

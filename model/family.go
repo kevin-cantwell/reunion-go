@@ -13,10 +13,12 @@ type Family struct {
 
 // FamilyEvent represents an event associated with a family (marriage, etc.).
 type FamilyEvent struct {
-	Tag       uint16 `json:"tag"`
-	TypeCode  uint16 `json:"type_code,omitempty"`
-	SchemaID  uint16 `json:"schema_id,omitempty"`
-	PlaceRefs []int  `json:"place_refs,omitempty"`
-	Date      string `json:"date,omitempty"`
-	RawData   []byte `json:"-"`
+	Tag             uint16           `json:"tag"`
+	TypeCode        uint16           `json:"type_code,omitempty"`
+	SchemaID        uint16           `json:"schema_id,omitempty"`
+	PlaceRefs       []int            `json:"place_refs,omitempty"`
+	Date            string           `json:"date,omitempty"`
+	Text            string           `json:"text,omitempty"`
+	SourceCitations []SourceCitation `json:"source_citations,omitempty"`
+	RawData         []byte           `json:"-"`
 }
