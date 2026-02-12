@@ -313,6 +313,21 @@ func ExtractEventText(fieldData []byte) string {
 		// Skip date sub-TLVs (length == 8) and non-zero tags
 		if subTag == 0x0000 && subLen > 8 {
 			raw := fieldData[pos+4 : pos+int(subLen)]
+			// Memo text starts with a printable byte; citation sub-TLVs
+			// start with binary header bytes (innerLength u32LE, count u32LE).
+			// Skip sub-TLVs whose first non-null byte is a control character.
+			firstPrintable := false
+			for _, b := range raw {
+				if b == 0 {
+					continue
+				}
+				firstPrintable = b >= 0x20
+				break
+			}
+			if !firstPrintable {
+				pos += int(subLen)
+				continue
+			}
 			// Strip null bytes
 			raw = bytes.ReplaceAll(raw, []byte{0}, nil)
 			// Strip [[pt:NNN]] place references
