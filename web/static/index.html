@@ -163,7 +163,7 @@
         <div class="card" x-show="(personDetail?.resolved_events || []).filter(e => !e.is_note && !e.is_fact).length > 0">
           <h3>Events</h3>
           <table>
-            <thead><tr><th>Type</th><th>Date</th><th>Place</th><th>Sources</th></tr></thead>
+            <thead><tr><th>Type</th><th>Date</th><th>Place</th><th>Memo</th><th>Sources</th></tr></thead>
             <tbody>
               <template x-for="evt in (personDetail?.resolved_events || []).filter(e => !e.is_note && !e.is_fact)" :key="evt.schema_id + '-' + evt.tag">
                 <tr>
@@ -176,6 +176,7 @@
                       <a href="#" @click.prevent="navigate('place', pl.id)" x-text="pl.name" class="place-link"></a>
                     </template>
                   </td>
+                  <td x-text="evt.text || ''"></td>
                   <td>
                     <sup class="source-cite-group" x-show="(evt.source_citations || []).length > 0">
                       <template x-for="(sc, i) in evt.source_citations || []" :key="sc.source_id">

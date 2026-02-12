@@ -179,10 +179,14 @@ A `total_length < 4` terminates parsing.
 | `0x000C` | Surname (primary)    | Null-padded string                 |
 | `0x001B` | Sex                  | 1 byte: `1`=male, `2`=female      |
 | `0x001E` | Given name           | Null-padded string                 |
+| `0x0020` | Name source citations| Source citation block (see below)  |
 | `0x0023` | Surname (secondary)  | Null-padded string                 |
+| `0x0028` | Prefix title         | Null-padded string (e.g. "Dr.")    |
+| `0x002D` | Suffix title         | Null-padded string (e.g. "Jr.", "III") |
+| `0x0037` | User ID              | Null-padded string                 |
 | `≥0x0100`| Events               | Event sub-structure (see below)    |
 
-Events with tags `< 0x03E8` may contain inline note references.
+Events with tags `< 0x03E8` may contain inline note references. Events with tags `0x03E8`–`0x0BB7` are life events (birth, death, etc.). Events with tags `≥ 0x0BB8` are facts (occupation, religion, etc.).
 
 #### Family Field Tags (`0x20C8`)
 
@@ -219,6 +223,35 @@ Offset 18+:    Sub-TLV fields
 ```
 
 Place references are embedded as `[[pt:NNN]]` text patterns within the raw event data.
+
+#### Event Sub-TLV Fields
+
+Sub-TLV fields at offset 18 within event data follow the standard TLV encoding (length u16 LE + tag u16 LE + data). All use tag `0x0000`. They appear in this order:
+
+| Sub-TLV | Length | Content |
+|---------|--------|---------|
+| Date | Exactly 8 | 4-byte date encoding (see Date Encoding) |
+| Place ref | Varies | `[[pt:NNN]]` text |
+| Memo / Fact text | Varies, starts with printable byte | Free-text memo (events) or fact value (facts, e.g. "Senator") |
+| Source citations | Varies, starts with binary header | Citation block: `innerLength(u32LE) + count(u32LE) + entries` |
+
+The memo and citation sub-TLVs are distinguished by their first byte: memo text starts with a printable character (`≥ 0x20`), while citation data starts with a binary length field.
+
+#### Source Citation Encoding
+
+Source citations appear both as person-level fields (tag `0x0020`) and as the last sub-TLV within event data:
+
+```
+Offset  Size   Description
+──────  ────   ───────────
+0       4      Inner length (uint32 LE)
+4       4      Citation count (uint32 LE)
+Per entry:
+  0     2      Entry length (uint16 LE, includes this field)
+  2     2      Unknown / hash
+  4     4      Source record ID (uint32 LE)
+  8     N      Detail text (entry_length - 8 bytes), null-stripped
+```
 
 #### Date Encoding
 
@@ -291,7 +324,7 @@ Surname index stored as parenthesized entries like `(SURNAME, GIVEN)` separated 
 
 | Area | Status |
 |------|--------|
-| Full set of event tag values and their meanings | Partially known |
+| Full set of person field tags (e.g. flags, checkboxes) | Partially known |
 | Media metadata field encoding | Unknown |
 | Doc (`0x2108`) and Report (`0x210C`) record internals | Unknown |
 | 8-byte `ref` field semantics in place records | Unknown |
