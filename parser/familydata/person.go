@@ -13,6 +13,9 @@ const (
 	TagSurname2         uint16 = 0x0023
 	TagSexFlags         uint16 = 0x001B
 	TagNameSourceCiting uint16 = 0x0020
+	TagPrefixTitle      uint16 = 0x0028
+	TagSuffixTitle      uint16 = 0x002D
+	TagUserID           uint16 = 0x0037
 )
 
 // ParsePerson parses a 0x20C4 person record into a Person model.
@@ -45,6 +48,12 @@ func ParsePerson(rec RawRecord, ec *reunion.ErrorCollector) (*model.Person, erro
 					p.Sex = model.SexFemale
 				}
 			}
+		case TagPrefixTitle:
+			p.PrefixTitle = cleanString(f.Data)
+		case TagSuffixTitle:
+			p.SuffixTitle = cleanString(f.Data)
+		case TagUserID:
+			p.UserID = cleanString(f.Data)
 		case TagNameSourceCiting:
 			if cites := ExtractSourceCitations(f.Data); len(cites) > 0 {
 				p.SourceCitations = append(p.SourceCitations, cites...)

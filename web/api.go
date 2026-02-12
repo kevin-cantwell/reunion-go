@@ -40,6 +40,9 @@ type PersonDetail struct {
 	ID              uint32                  `json:"id"`
 	GivenName       string                  `json:"given_name,omitempty"`
 	Surname         string                  `json:"surname,omitempty"`
+	PrefixTitle     string                  `json:"prefix_title,omitempty"`
+	SuffixTitle     string                  `json:"suffix_title,omitempty"`
+	UserID          string                  `json:"user_id,omitempty"`
 	Name            string                  `json:"name"`
 	Sex             int                     `json:"sex"`
 	SexLabel        string                  `json:"sex_label"`
@@ -382,6 +385,9 @@ func (s *Server) handlePerson(w http.ResponseWriter, r *http.Request) {
 		ID:              p.ID,
 		GivenName:       p.GivenName,
 		Surname:         p.Surname,
+		PrefixTitle:     p.PrefixTitle,
+		SuffixTitle:     p.SuffixTitle,
+		UserID:          p.UserID,
 		Name:            index.FormatName(p),
 		Sex:             int(p.Sex),
 		SexLabel:        p.Sex.String(),

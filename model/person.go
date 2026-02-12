@@ -26,6 +26,9 @@ type Person struct {
 	SeqNum          uint16           `json:"seq_num"`
 	GivenName       string           `json:"given_name,omitempty"`
 	Surname         string           `json:"surname,omitempty"`
+	PrefixTitle     string           `json:"prefix_title,omitempty"`
+	SuffixTitle     string           `json:"suffix_title,omitempty"`
+	UserID          string           `json:"user_id,omitempty"`
 	Sex             Sex              `json:"sex"`
 	Events          []PersonEvent    `json:"events,omitempty"`
 	NoteRefs        []NoteRef        `json:"note_refs,omitempty"`
