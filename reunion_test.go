@@ -2,36 +2,30 @@ package reunion_test
 
 import (
 	"encoding/json"
-	"os"
 	"testing"
 
 	reunion "github.com/kevin-cantwell/reunion-go"
+	"github.com/kevin-cantwell/reunion-go/model"
 	_ "github.com/kevin-cantwell/reunion-go/parser" // register v14 parser
 )
 
-const testBundle = "/Users/kevin/Downloads/Cantwell 14.familyfile14"
-
 func TestOpen(t *testing.T) {
-	if _, err := os.Stat(testBundle); os.IsNotExist(err) {
-		t.Skip("skipping: test bundle not found at ", testBundle)
-	}
-
-	ff, err := reunion.Open(testBundle, nil)
+	ff, err := reunion.Open("testdata/Sample Family 14.familyfile14", nil)
 	if err != nil {
 		t.Fatalf("Open() error: %v", err)
 	}
 
-	// Verify signature
-	if ff.Signature != "404065" {
-		t.Errorf("Signature = %q, want %q", ff.Signature, "404065")
+	// Signature
+	if ff.Signature != "1579320" {
+		t.Errorf("Signature = %q, want %q", ff.Signature, "1579320")
 	}
 
-	// Verify version
+	// Version
 	if ff.Version != 14 {
 		t.Errorf("Version = %d, want 14", ff.Version)
 	}
 
-	// Verify header
+	// Header
 	if ff.Header == nil {
 		t.Fatal("Header is nil")
 	}
@@ -39,77 +33,63 @@ func TestOpen(t *testing.T) {
 		t.Errorf("Header.Magic = %q, want %q", ff.Header.Magic, "3SDUAU~R")
 	}
 
-	// Verify places from cache
-	if len(ff.Places) < 487 {
-		t.Errorf("Places = %d, want >= 487", len(ff.Places))
+	// Record counts
+	counts := []struct {
+		name string
+		got  int
+		want int
+	}{
+		{"Persons", len(ff.Persons), 49},
+		{"Families", len(ff.Families), 35},
+		{"Places", len(ff.Places), 52},
+		{"EventDefinitions", len(ff.EventDefinitions), 147},
+		{"Sources", len(ff.Sources), 25},
+		{"Notes", len(ff.Notes), 28},
+		{"MediaRefs", len(ff.MediaRefs), 36},
+		{"PlaceUsages", len(ff.PlaceUsages), 52},
 	}
-
-	// Verify first names from cache (353 in file, last record truncated = 352 parseable)
-	if len(ff.FirstNames) < 352 {
-		t.Errorf("FirstNames = %d, want >= 352", len(ff.FirstNames))
-	}
-
-	// Verify persons from familydata
-	if len(ff.Persons) < 1094 {
-		t.Errorf("Persons = %d, want >= 1094", len(ff.Persons))
-	}
-
-	// Verify most persons have names (TLV fix)
-	namedCount := 0
-	for _, p := range ff.Persons {
-		if p.GivenName != "" || p.Surname != "" {
-			namedCount++
+	for _, c := range counts {
+		if c.got != c.want {
+			t.Errorf("%s = %d, want %d", c.name, c.got, c.want)
 		}
 	}
-	if namedCount < 1000 {
-		t.Errorf("Named persons = %d, want >= 1000", namedCount)
-	}
-	t.Logf("Named persons: %d / %d", namedCount, len(ff.Persons))
 
-	// Verify families from familydata
-	if len(ff.Families) < 770 {
-		t.Errorf("Families = %d, want >= 770", len(ff.Families))
-	}
-
-	// Verify most families have at least one partner (TLV fix)
-	partnerCount := 0
-	for _, f := range ff.Families {
-		if f.Partner1 > 0 || f.Partner2 > 0 {
-			partnerCount++
+	// All persons should have names
+	for i, p := range ff.Persons {
+		if p.GivenName == "" && p.Surname == "" {
+			t.Errorf("Person[%d] (ID %d) has no name", i, p.ID)
 		}
 	}
-	if partnerCount < 700 {
-		t.Errorf("Families with partners = %d, want >= 700", partnerCount)
-	}
-	t.Logf("Families with partners: %d / %d", partnerCount, len(ff.Families))
 
-	// Verify event definitions
-	if len(ff.EventDefinitions) < 162 {
-		t.Errorf("EventDefinitions = %d, want >= 162", len(ff.EventDefinitions))
-	}
-
-	// Verify note files discovered
-	noteFileCount := 0
-	for _, n := range ff.Notes {
-		if n.Filename != "" {
-			noteFileCount++
+	// All families should have at least one partner
+	for i, f := range ff.Families {
+		if f.Partner1 == 0 && f.Partner2 == 0 {
+			t.Errorf("Family[%d] (ID %d) has no partners", i, f.ID)
 		}
 	}
-	if noteFileCount < 30 {
-		t.Errorf("Note files = %d, want >= 30", noteFileCount)
+
+	// Spot-check: ID 4 = John Fitzgerald Kennedy, Male
+	var jfk *model.Person
+	for i := range ff.Persons {
+		if ff.Persons[i].ID == 4 {
+			jfk = &ff.Persons[i]
+			break
+		}
+	}
+	if jfk == nil {
+		t.Fatal("Person with ID 4 not found")
+	}
+	if jfk.GivenName != "John Fitzgerald" {
+		t.Errorf("JFK GivenName = %q, want %q", jfk.GivenName, "John Fitzgerald")
+	}
+	if jfk.Surname != "KENNEDY" {
+		t.Errorf("JFK Surname = %q, want %q", jfk.Surname, "KENNEDY")
+	}
+	if jfk.Sex != model.SexMale {
+		t.Errorf("JFK Sex = %d, want SexMale (%d)", jfk.Sex, model.SexMale)
 	}
 
-	// Verify timestamps
-	if len(ff.Timestamps) < 153 {
-		t.Errorf("Timestamps = %d, want >= 153", len(ff.Timestamps))
-	}
-
-	// Verify place usages
-	if len(ff.PlaceUsages) < 487 {
-		t.Errorf("PlaceUsages = %d, want >= 487", len(ff.PlaceUsages))
-	}
-
-	// Verify JSON round-trip
+	// JSON round-trip
 	jsonData, err := ff.ToJSON()
 	if err != nil {
 		t.Fatalf("ToJSON() error: %v", err)
@@ -118,13 +98,11 @@ func TestOpen(t *testing.T) {
 		t.Fatal("ToJSON() produced empty output")
 	}
 
-	// Verify JSON is valid
 	var raw json.RawMessage
 	if err := json.Unmarshal(jsonData, &raw); err != nil {
 		t.Fatalf("JSON output is not valid: %v", err)
 	}
 
-	// Verify compact JSON
 	compactData, err := ff.ToJSONCompact()
 	if err != nil {
 		t.Fatalf("ToJSONCompact() error: %v", err)
@@ -132,19 +110,18 @@ func TestOpen(t *testing.T) {
 	if len(compactData) >= len(jsonData) {
 		t.Errorf("Compact JSON (%d bytes) should be smaller than indented (%d bytes)", len(compactData), len(jsonData))
 	}
+}
 
-	// Log some stats
-	t.Logf("Persons: %d", len(ff.Persons))
-	t.Logf("Families: %d", len(ff.Families))
-	t.Logf("Places: %d", len(ff.Places))
-	t.Logf("PlaceUsages: %d", len(ff.PlaceUsages))
-	t.Logf("EventDefinitions: %d", len(ff.EventDefinitions))
-	t.Logf("FirstNames: %d", len(ff.FirstNames))
-	t.Logf("Note files: %d", noteFileCount)
-	t.Logf("Inline notes: %d", len(ff.Notes)-noteFileCount)
-	t.Logf("Sources: %d", len(ff.Sources))
-	t.Logf("MediaRefs: %d", len(ff.MediaRefs))
-	t.Logf("Timestamps: %d", len(ff.Timestamps))
-	t.Logf("Warnings: %d", len(ff.Warnings))
-	t.Logf("JSON size: %d bytes", len(jsonData))
+func TestOpen_NotABundle(t *testing.T) {
+	_, err := reunion.Open("/tmp/not-a-bundle.txt", nil)
+	if err == nil {
+		t.Error("Open() should error for non-bundle path")
+	}
+}
+
+func TestOpen_MissingBundle(t *testing.T) {
+	_, err := reunion.Open("/tmp/nonexistent.familyfile14", nil)
+	if err == nil {
+		t.Error("Open() should error for missing bundle")
+	}
 }
