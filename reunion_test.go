@@ -2,6 +2,7 @@ package reunion_test
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 
 	reunion "github.com/kevin-cantwell/reunion-go"
@@ -11,6 +12,10 @@ import (
 const testBundle = "/Users/kevin/Downloads/Cantwell 14.familyfile14"
 
 func TestOpen(t *testing.T) {
+	if _, err := os.Stat(testBundle); os.IsNotExist(err) {
+		t.Skip("skipping: test bundle not found at ", testBundle)
+	}
+
 	ff, err := reunion.Open(testBundle, nil)
 	if err != nil {
 		t.Fatalf("Open() error: %v", err)
