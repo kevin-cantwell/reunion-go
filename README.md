@@ -264,17 +264,16 @@ Byte 22:       Precision flags
                  0x40 = "after"
                  0xE0 = "after", year-only
 
-Byte 23:       Day byte
-                 Bits 4-0: day (0 = unknown)
-                 Bits 7-6: 11 = "before" qualifier
+Byte 23:       Day + month offset
+                 Bits 7-6: month offset within group (0-3)
+                 Bits 5-0: day of month (0 = unknown)
 
-Bytes 24-25:   Year + quarter (uint16 LE)
-                 totalQ = (year + 8000) * 4 + quarter
-                 quarter: 0=Q1(Jan-Mar), 1=Q2(Apr-Jun), 2=Q3(Jul-Sep), 3=Q4(Oct-Dec)
-
-Bytes 2-3:     Month within quarter (from event header)
-                 uint16LE % 3 → [0=1st month, 1=3rd month, 2=2nd month]
+Bytes 24-25:   Year + month group (uint16 LE)
+                 totalQ = (year + 8000) * 4 + group
+                 group: 0 → months 1-3, 1 → months 4-7, 2 → months 8-11, 3 → month 12
 ```
+
+The month is split across two bytes: `month = group * 4 + offset`, yielding 1–12. For example, November (month 11) encodes as group=2, offset=3 — so `totalQ` ends in binary `10` and the day byte has bits 7-6 = `11`.
 
 ### Note Record Format (`0x2104`)
 

@@ -115,19 +115,23 @@ func ExtractPlaceRefs(data []byte) []int {
 // Event data has an 18-byte fixed header, followed by sub-TLV fields.
 // The first sub-TLV (at offset 18) contains the date when its total length == 8.
 //
-// Year and quarter are encoded in bytes[24:25] as u16 LE:
+// Year and month group are encoded in bytes[24:25] as u16 LE:
 //
-//	totalQ = (year + 8000) * 4 + quarter
-//	quarter: 0=Q1(Jan-Mar), 1=Q2(Apr-Jun), 2=Q3(Jul-Sep), 3=Q4(Oct-Dec)
+//	totalQ = (year + 8000) * 4 + group
+//	group: 0 → months 1-3, 1 → months 4-7, 2 → months 8-11, 3 → month 12
 //
-// Month within the quarter is encoded in the event header at bytes[2:3]:
+// Day and month offset are in byte[23]:
 //
-//	u16LE(bytes[2:3]) % 3 maps via [0→1st, 1→3rd, 2→2nd] to month offset
+//	bits 7-6: month offset within the group (0-3)
+//	bits 5-0: day of month (0 = unknown)
+//	month = group*4 + offset  (1-12)
 //
-// Day and qualifier are in bytes[22:23]:
+// Precision flags are in byte[22]:
 //
-//	byte[22]: precision flags (0x00=normal, 0xA0=approximate, 0x40=after)
-//	byte[23]: day (bits 4-0, 0=unknown); bit 7 = day-present flag; bits 7-6 = 11 means "before"
+//	0x00 = exact date
+//	0xA0 = approximate ("about"), year-only
+//	0x40 = "after"
+//	0xE0 = "after", year-only
 func ExtractDate(fieldData []byte) string {
 	if len(fieldData) < 26 {
 		return ""
@@ -145,19 +149,17 @@ func ExtractDate(fieldData []byte) string {
 
 	totalQ := int(monthYearHi)<<8 | int(monthYearLo)
 	year := totalQ/4 - 8000
-	quarter := totalQ % 4 // 0=Q1(Jan-Mar), 1=Q2(Apr-Jun), 2=Q3(Jul-Sep), 3=Q4(Oct-Dec)
 
-	// Month within quarter is encoded in the event header u16LE at bytes[2:3].
-	// The value mod 3 maps: 0→1st month, 1→3rd month, 2→2nd month of the quarter.
-	hdrVal, _ := binutil.U16LE(fieldData, 2)
-	monthOffsetTable := [3]int{0, 2, 1} // u16%3 → month offset (0-indexed within quarter)
-	monthInQuarter := monthOffsetTable[int(hdrVal)%3]
-	month := quarter*3 + monthInQuarter + 1
+	// Month is split across two locations:
+	//   - bits 1-0 of totalQ give the high 2 bits (group 0-3)
+	//   - bits 7-6 of dayByte give the low 2 bits (offset 0-3 within group)
+	// Combined: month = group*4 + offset, yielding 1-12.
+	group := totalQ % 4
+	month := group*4 + int(dayByte>>6)
 
-	isBefore := dayByte&0xC0 == 0xC0 // bits 7-6 both set = "before"
-	day := int(dayByte & 0x1F)
+	day := int(dayByte & 0x3F)
 
-	if year < 1 || year > 9999 {
+	if year < 1 || year > 9999 || month < 1 || month > 12 {
 		return ""
 	}
 
@@ -177,8 +179,6 @@ func ExtractDate(fieldData []byte) string {
 		prefix = "after "
 	case yearOnly:
 		prefix = "about "
-	case isBefore:
-		prefix = "before "
 	}
 
 	if yearOnly {

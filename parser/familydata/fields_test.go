@@ -132,59 +132,59 @@ func TestExtractString(t *testing.T) {
 }
 
 func TestExtractDate(t *testing.T) {
-	// Helper to build a 26-byte event sub-data with date encoding
-	buildDateData := func(precFlags, dayByte byte, hdrVal uint16, year, quarter int) []byte {
+	// Helper to build a 26-byte event sub-data with date encoding.
+	// Month is split: group = month/4 stored in totalQ low bits,
+	// offset = month%4 stored in dayByte bits 7-6.
+	buildDateData := func(precFlags byte, day, month, year int) []byte {
 		buf := make([]byte, 26)
-		// hdrVal at offset 2 (u16 LE) — encodes month within quarter
-		putU16LE(buf, 2, hdrVal)
 		// Sub-TLV at offset 18: length 8 means date sub-TLV
 		putU16LE(buf, 18, 8)
 		// Precision flags at offset 22
 		buf[22] = precFlags
-		// Day byte at offset 23
-		buf[23] = dayByte
-		// Year+quarter encoding at offset 24 (u16 LE)
-		totalQ := uint16((year+8000)*4 + quarter)
+		// Day byte at offset 23: bits 7-6 = month offset, bits 5-0 = day
+		group := month / 4
+		offset := month % 4
+		buf[23] = byte(offset<<6) | byte(day&0x3F)
+		// Year+group encoding at offset 24 (u16 LE)
+		totalQ := uint16((year+8000)*4 + group)
 		putU16LE(buf, 24, totalQ)
 		return buf
 	}
 
 	tests := []struct {
-		name      string
-		data      []byte
-		want      string
+		name string
+		data []byte
+		want string
 	}{
 		{
 			name: "normal date: 15 Mar 1990",
-			// quarter=0 (Q1=Jan-Mar), hdrVal%3=0 → month offset 0 → month=1 (Jan)
-			// Wait: quarter 0 = Q1(Jan-Mar), monthInQuarter depends on hdrVal%3
-			// hdrVal%3=0 → offset 0 → month 1; hdrVal%3=1 → offset 2 → month 3; hdrVal%3=2 → offset 1 → month 2
-			// For March: quarter=0, monthOffset=2 → hdrVal%3=1
-			data: buildDateData(0x00, 15, 1, 1990, 0),
+			data: buildDateData(0x00, 15, 3, 1990),
 			want: "15 Mar 1990",
 		},
 		{
 			name: "month only: Jun 2000",
-			// June = quarter 1 (Apr-Jun), month offset 2 (Jun is 3rd in Q2) → hdrVal%3=1
-			data: buildDateData(0x00, 0, 1, 2000, 1),
+			data: buildDateData(0x00, 0, 6, 2000),
 			want: "Jun 2000",
 		},
 		{
 			name: "about year only: about 1850",
-			data: buildDateData(0xA0, 0, 0, 1850, 0),
+			data: buildDateData(0xA0, 0, 1, 1850),
 			want: "about 1850",
 		},
 		{
 			name: "after date: after 1 Jan 1900",
-			// Jan = quarter 0, monthOffset 0, hdrVal%3=0
-			data: buildDateData(0x40, 1, 0, 1900, 0),
+			data: buildDateData(0x40, 1, 1, 1900),
 			want: "after 1 Jan 1900",
 		},
 		{
-			name: "before date: before 25 Dec 1800",
-			// Dec = quarter 3, monthOffset 2 (Dec is 3rd in Q4) → hdrVal%3=1
-			data: buildDateData(0x00, 25|0xC0, 1, 1800, 3),
-			want: "before 25 Dec 1800",
+			name: "Nov date: 22 Nov 1963",
+			data: buildDateData(0x00, 22, 11, 1963),
+			want: "22 Nov 1963",
+		},
+		{
+			name: "Dec date: 25 Dec 1800",
+			data: buildDateData(0x00, 25, 12, 1800),
+			want: "25 Dec 1800",
 		},
 		{
 			name: "too short",
