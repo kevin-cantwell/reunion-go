@@ -24,7 +24,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF#refs/tags/}"
           LDFLAGS="-s -w"
-          MODULE="github.com/kevin-cantwell/reunion-go/cmd/reunion"
+          PKG="./cmd/reunion"
           TARGETS=(
             "linux/amd64"
             "linux/arm64"
@@ -42,7 +42,7 @@ jobs:
               output="${output}.exe"
             fi
             echo "Building ${GOOS}/${GOARCH}..."
-            GOOS=$GOOS GOARCH=$GOARCH go build -ldflags "$LDFLAGS" -o "$output" ./$MODULE
+            GOOS=$GOOS GOARCH=$GOARCH go build -ldflags "$LDFLAGS" -o "$output" $PKG
           done
 
       - name: Create checksums
