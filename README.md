@@ -216,8 +216,8 @@ Events with tags `< 0x03E8` may contain inline note references. Events with tags
 Event fields (tags `≥ 0x0100`) contain a nested structure:
 
 ```
-Offset 0-1:    2-byte sub-header
-Offset 2-3:    2-byte month-within-quarter encoding
+Offset 0-1:    2-byte sub-header (event-specific metadata, not date-related)
+Offset 2-3:    2-byte sub-header continuation
 Offset 4-17:   14 bytes sub-header continuation (schema ID at offset 16 as uint16 LE)
 Offset 18+:    Sub-TLV fields
 ```
@@ -352,6 +352,8 @@ Surname index stored as parenthesized entries like `(SURNAME, GIVEN)` separated 
 | Area | Status |
 |------|--------|
 | Full set of person field tags (e.g. flags, checkboxes) | Partially known |
+| Date precision flag for "before" qualifier | Unknown (`precFlags` values for "after" and "about" are known) |
+| Event sub-header bytes 0-3 | Purpose unknown (not date-related; does not change when date changes) |
 | Media metadata field encoding | Unknown |
 | Doc (`0x2108`) and Report (`0x210C`) record internals | Unknown |
 | 8-byte `ref` field semantics in place records | Unknown |
