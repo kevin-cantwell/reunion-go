@@ -8,9 +8,15 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
+	"time"
 
+	"github.com/fsnotify/fsnotify"
+
+	reunion "github.com/kevin-cantwell/reunion-go"
 	"github.com/kevin-cantwell/reunion-go/index"
 	"github.com/kevin-cantwell/reunion-go/model"
 )
@@ -18,19 +24,82 @@ import (
 //go:embed static/*
 var staticFiles embed.FS
 
+// snapshot holds a parsed FamilyFile and its prebuilt index.
+type snapshot struct {
+	ff  *model.FamilyFile
+	idx *index.Index
+}
+
 // Server serves the REST API and SPA for a parsed FamilyFile.
 type Server struct {
-	ff     *model.FamilyFile
-	idx    *index.Index
+	data   atomic.Pointer[snapshot]
 	logger *slog.Logger
 }
 
 // New creates a Server, building the index from the FamilyFile.
 func New(ff *model.FamilyFile, logger *slog.Logger) *Server {
-	return &Server{
-		ff:     ff,
-		idx:    index.BuildIndex(ff),
-		logger: logger,
+	s := &Server{logger: logger}
+	s.data.Store(&snapshot{ff: ff, idx: index.BuildIndex(ff)})
+	return s
+}
+
+// load returns the current snapshot.
+func (s *Server) load() *snapshot {
+	return s.data.Load()
+}
+
+// Watch watches the bundle at bundlePath for changes and reloads automatically.
+// It blocks until the context is done or an unrecoverable error occurs.
+func (s *Server) Watch(bundlePath string) error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("creating watcher: %w", err)
+	}
+	defer watcher.Close()
+
+	// Watch the bundle directory itself.
+	absPath, err := filepath.Abs(bundlePath)
+	if err != nil {
+		return fmt.Errorf("resolving path: %w", err)
+	}
+	if err := watcher.Add(absPath); err != nil {
+		return fmt.Errorf("watching %s: %w", absPath, err)
+	}
+	s.logger.Info("watching bundle for changes", "path", absPath)
+
+	// Debounce: Reunion writes multiple files when saving.
+	var debounce *time.Timer
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return nil
+			}
+			if event.Op&(fsnotify.Write|fsnotify.Create) == 0 {
+				continue
+			}
+			if debounce != nil {
+				debounce.Stop()
+			}
+			debounce = time.AfterFunc(500*time.Millisecond, func() {
+				s.logger.Info("bundle changed, reloading", "trigger", filepath.Base(event.Name))
+				ff, err := reunion.Open(bundlePath, nil)
+				if err != nil {
+					s.logger.Error("reload failed", "err", err)
+					return
+				}
+				s.data.Store(&snapshot{ff: ff, idx: index.BuildIndex(ff)})
+				s.logger.Info("reloaded",
+					"persons", len(ff.Persons),
+					"families", len(ff.Families),
+				)
+			})
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return nil
+			}
+			s.logger.Error("watcher error", "err", err)
+		}
 	}
 }
 

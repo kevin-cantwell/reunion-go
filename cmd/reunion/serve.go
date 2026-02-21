@@ -38,6 +38,13 @@ var serveCmd = &cobra.Command{
 			"notes", len(familyFile.Notes),
 		)
 
+		// Watch for bundle changes and reload automatically.
+		go func() {
+			if err := srv.Watch(path); err != nil {
+				logger.Error("file watcher stopped", "err", err)
+			}
+		}()
+
 		fmt.Fprintf(os.Stderr, "Reunion Explorer running at http://localhost%s\n", addr)
 		return srv.ListenAndServe(addr)
 	},

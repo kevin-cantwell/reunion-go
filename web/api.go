@@ -139,7 +139,7 @@ type PaginatedResponse struct {
 // --- Helpers ---
 
 func (s *Server) personRef(id uint32) PersonRef {
-	p, ok := s.idx.Persons[id]
+	p, ok := s.load().idx.Persons[id]
 	if !ok {
 		return PersonRef{ID: id, Name: "?"}
 	}
@@ -161,7 +161,7 @@ func (s *Server) resolveSourceCitations(cites []model.SourceCitation) []SourceCi
 	out := make([]SourceCitationDisplay, 0, len(cites))
 	for _, c := range cites {
 		title := ""
-		if src, ok := s.idx.Sources[c.SourceID]; ok {
+		if src, ok := s.load().idx.Sources[c.SourceID]; ok {
 			title = src.Title
 		}
 		out = append(out, SourceCitationDisplay{
@@ -178,7 +178,7 @@ func (s *Server) resolveEvents(events []model.PersonEvent) []ResolvedEvent {
 	for _, evt := range events {
 		re := ResolvedEvent{
 			SchemaID:        evt.SchemaID,
-			SchemaName:      s.idx.SchemaName(evt.SchemaID),
+			SchemaName:      s.load().idx.SchemaName(evt.SchemaID),
 			Tag:             evt.Tag,
 			Date:            evt.Date,
 			Text:            evt.Text,
@@ -188,7 +188,7 @@ func (s *Server) resolveEvents(events []model.PersonEvent) []ResolvedEvent {
 		}
 		for _, placeRef := range evt.PlaceRefs {
 			pid := uint32(placeRef)
-			name := s.idx.PlaceName(placeRef)
+			name := s.load().idx.PlaceName(placeRef)
 			re.Places = append(re.Places, PlaceRef{ID: pid, Name: name})
 		}
 		resolved = append(resolved, re)
@@ -223,7 +223,7 @@ func (s *Server) renderMarkupHTML(nodes []model.MarkupNode) string {
 			b.WriteString("</a>")
 		case model.MarkupSourceCitation:
 			title := "Source " + n.Value
-			if src, ok := s.idx.Sources[parseUint32(n.Value)]; ok && src.Title != "" {
+			if src, ok := s.load().idx.Sources[parseUint32(n.Value)]; ok && src.Title != "" {
 				title = src.Title
 			}
 			b.WriteString(`<sup class="source-cite-group" title="`)
@@ -255,7 +255,7 @@ func parseUint32(s string) uint32 {
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	male, female, unknown, named := 0, 0, 0, 0
-	for _, p := range s.ff.Persons {
+	for _, p := range s.load().ff.Persons {
 		switch p.Sex {
 		case model.SexMale:
 			male++
@@ -269,7 +269,7 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	withPartners, withChildren := 0, 0
-	for _, f := range s.ff.Families {
+	for _, f := range s.load().ff.Families {
 		if f.Partner1 > 0 || f.Partner2 > 0 {
 			withPartners++
 		}
@@ -278,19 +278,19 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, StatsResponse{
-		Persons:              len(s.ff.Persons),
+		Persons:              len(s.load().ff.Persons),
 		PersonsNamed:         named,
 		PersonsMale:          male,
 		PersonsFemale:        female,
 		PersonsUnknownSex:    unknown,
-		Families:             len(s.ff.Families),
+		Families:             len(s.load().ff.Families),
 		FamiliesWithPartners: withPartners,
 		FamiliesWithChildren: withChildren,
-		Places:               len(s.ff.Places),
-		EventTypes:           len(s.ff.EventDefinitions),
-		Sources:              len(s.ff.Sources),
-		Notes:                len(s.ff.Notes),
-		Media:                len(s.ff.MediaRefs),
+		Places:               len(s.load().ff.Places),
+		EventTypes:           len(s.load().ff.EventDefinitions),
+		Sources:              len(s.load().ff.Sources),
+		Notes:                len(s.load().ff.Notes),
+		Media:                len(s.load().ff.MediaRefs),
 	})
 }
 
@@ -301,8 +301,8 @@ func (s *Server) handlePersons(w http.ResponseWriter, r *http.Request) {
 	perPage := parseIntQuery(r, "per_page", 100)
 
 	var refs []PersonRef
-	for i := range s.ff.Persons {
-		p := &s.ff.Persons[i]
+	for i := range s.load().ff.Persons {
+		p := &s.load().ff.Persons[i]
 		if surname != "" && !strings.EqualFold(p.Surname, surname) {
 			continue
 		}
@@ -338,7 +338,7 @@ func (s *Server) handlePerson(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	p, ok := s.idx.Persons[id]
+	p, ok := s.load().idx.Persons[id]
 	if !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("person %d not found", id))
 		return
@@ -347,13 +347,13 @@ func (s *Server) handlePerson(w http.ResponseWriter, r *http.Request) {
 	// Collect notes from person's NoteRefs (inline notes linked via event data)
 	var notes []NoteDisplay
 	for _, ref := range p.NoteRefs {
-		n, ok := s.idx.Notes[ref.NoteID]
+		n, ok := s.load().idx.Notes[ref.NoteID]
 		if !ok || n.DisplayText == "" {
 			continue
 		}
 		nd := NoteDisplay{
 			ID:    n.ID,
-			Label: s.idx.SchemaName(ref.SchemaID),
+			Label: s.load().idx.SchemaName(ref.SchemaID),
 			Text:  n.DisplayText,
 		}
 		if len(n.Markup) > 0 {
@@ -366,12 +366,12 @@ func (s *Server) handlePerson(w http.ResponseWriter, r *http.Request) {
 	for _, nd := range notes {
 		seen[nd.Text] = true
 	}
-	for i := range s.ff.Notes {
-		n := &s.ff.Notes[i]
+	for i := range s.load().ff.Notes {
+		n := &s.load().ff.Notes[i]
 		if n.PersonID == int(p.ID) && n.DisplayText != "" && !seen[n.DisplayText] {
 			nd := NoteDisplay{
 				ID:    n.ID,
-				Label: s.idx.SchemaName(uint16(n.SourceID)),
+				Label: s.load().idx.SchemaName(uint16(n.SourceID)),
 				Text:  n.DisplayText,
 			}
 			if len(n.Markup) > 0 {
@@ -394,10 +394,10 @@ func (s *Server) handlePerson(w http.ResponseWriter, r *http.Request) {
 		SourceCitations: s.resolveSourceCitations(p.SourceCitations),
 		ResolvedEvents:  s.resolveEvents(p.Events),
 		Notes:           notes,
-		Spouses:         s.personRefs(s.idx.Spouses(p.ID)),
-		Children:        s.personRefs(s.idx.ChildrenOf(p.ID)),
-		Parents:         s.personRefs(s.idx.Parents(p.ID)),
-		Siblings:        s.personRefs(s.idx.Siblings(p.ID)),
+		Spouses:         s.personRefs(s.load().idx.Spouses(p.ID)),
+		Children:        s.personRefs(s.load().idx.ChildrenOf(p.ID)),
+		Parents:         s.personRefs(s.load().idx.Parents(p.ID)),
+		Siblings:        s.personRefs(s.load().idx.Siblings(p.ID)),
 	}
 
 	writeJSON(w, http.StatusOK, detail)
@@ -409,15 +409,15 @@ func (s *Server) handlePersonFamilies(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, ok := s.idx.Persons[id]; !ok {
+	if _, ok := s.load().idx.Persons[id]; !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("person %d not found", id))
 		return
 	}
 
-	famIDs := s.idx.FamiliesForPerson(id)
+	famIDs := s.load().idx.FamiliesForPerson(id)
 	details := make([]FamilyDetail, 0, len(famIDs))
 	for _, fid := range famIDs {
-		f, ok := s.idx.Families[fid]
+		f, ok := s.load().idx.Families[fid]
 		if !ok {
 			continue
 		}
@@ -432,12 +432,12 @@ func (s *Server) handlePersonAncestors(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, ok := s.idx.Persons[id]; !ok {
+	if _, ok := s.load().idx.Persons[id]; !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("person %d not found", id))
 		return
 	}
 	gen := parseIntQuery(r, "generations", 10)
-	entries := s.idx.Ancestors(id, gen)
+	entries := s.load().idx.Ancestors(id, gen)
 	refs := make([]TreeEntryRef, 0, len(entries))
 	for _, e := range entries {
 		refs = append(refs, TreeEntryRef{
@@ -456,12 +456,12 @@ func (s *Server) handlePersonDescendants(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, ok := s.idx.Persons[id]; !ok {
+	if _, ok := s.load().idx.Persons[id]; !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("person %d not found", id))
 		return
 	}
 	gen := parseIntQuery(r, "generations", 10)
-	entries := s.idx.Descendants(id, gen)
+	entries := s.load().idx.Descendants(id, gen)
 	refs := make([]TreeEntryRef, 0, len(entries))
 	for _, e := range entries {
 		refs = append(refs, TreeEntryRef{
@@ -480,11 +480,11 @@ func (s *Server) handlePersonTreetops(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, ok := s.idx.Persons[id]; !ok {
+	if _, ok := s.load().idx.Persons[id]; !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("person %d not found", id))
 		return
 	}
-	persons := s.idx.Treetops(id)
+	persons := s.load().idx.Treetops(id)
 	refs := make([]PersonRef, 0, len(persons))
 	for _, p := range persons {
 		refs = append(refs, PersonRef{ID: p.ID, Name: index.FormatName(p), Sex: p.Sex.String()})
@@ -498,17 +498,17 @@ func (s *Server) handlePersonSummary(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	p, ok := s.idx.Persons[id]
+	p, ok := s.load().idx.Persons[id]
 	if !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("person %d not found", id))
 		return
 	}
 
-	spouses := s.idx.Spouses(p.ID)
-	siblings := s.idx.Siblings(p.ID)
-	ancestors := s.idx.Ancestors(p.ID, 100)
-	descendants := s.idx.Descendants(p.ID, 100)
-	treetops := s.idx.Treetops(p.ID)
+	spouses := s.load().idx.Spouses(p.ID)
+	siblings := s.load().idx.Siblings(p.ID)
+	ancestors := s.load().idx.Ancestors(p.ID, 100)
+	descendants := s.load().idx.Descendants(p.ID, 100)
+	treetops := s.load().idx.Treetops(p.ID)
 
 	surnameCounts := make(map[string]int)
 	for _, a := range ancestors {
@@ -533,17 +533,17 @@ func (s *Server) handleFamilies(w http.ResponseWriter, r *http.Request) {
 	page := parseIntQuery(r, "page", 1)
 	perPage := parseIntQuery(r, "per_page", 100)
 
-	refs := make([]FamilyRef, 0, len(s.ff.Families))
-	for _, f := range s.ff.Families {
+	refs := make([]FamilyRef, 0, len(s.load().ff.Families))
+	for _, f := range s.load().ff.Families {
 		ref := FamilyRef{
 			ID:            f.ID,
 			ChildrenCount: len(f.Children),
 		}
 		if f.Partner1 > 0 {
-			ref.Partner1Name = s.idx.PersonName(f.Partner1)
+			ref.Partner1Name = s.load().idx.PersonName(f.Partner1)
 		}
 		if f.Partner2 > 0 {
-			ref.Partner2Name = s.idx.PersonName(f.Partner2)
+			ref.Partner2Name = s.load().idx.PersonName(f.Partner2)
 		}
 		refs = append(refs, ref)
 	}
@@ -571,7 +571,7 @@ func (s *Server) handleFamily(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	f, ok := s.idx.Families[id]
+	f, ok := s.load().idx.Families[id]
 	if !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("family %d not found", id))
 		return
@@ -601,7 +601,7 @@ func (s *Server) buildFamilyDetail(f *model.Family) FamilyDetail {
 }
 
 func (s *Server) handlePlaces(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.ff.Places)
+	writeJSON(w, http.StatusOK, s.load().ff.Places)
 }
 
 func (s *Server) handlePlace(w http.ResponseWriter, r *http.Request) {
@@ -610,7 +610,7 @@ func (s *Server) handlePlace(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	p, ok := s.idx.Places[id]
+	p, ok := s.load().idx.Places[id]
 	if !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("place %d not found", id))
 		return
@@ -624,16 +624,16 @@ func (s *Server) handlePlacePersons(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, ok := s.idx.Places[id]; !ok {
+	if _, ok := s.load().idx.Places[id]; !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("place %d not found", id))
 		return
 	}
-	personIDs := s.idx.PersonsByPlace(id)
+	personIDs := s.load().idx.PersonsByPlace(id)
 	writeJSON(w, http.StatusOK, s.personRefs(personIDs))
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.ff.EventDefinitions)
+	writeJSON(w, http.StatusOK, s.load().ff.EventDefinitions)
 }
 
 func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
@@ -642,7 +642,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	e, ok := s.idx.Schemas[id]
+	e, ok := s.load().idx.Schemas[id]
 	if !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("event type %d not found", id))
 		return
@@ -656,16 +656,16 @@ func (s *Server) handleEventPersons(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, ok := s.idx.Schemas[id]; !ok {
+	if _, ok := s.load().idx.Schemas[id]; !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("event type %d not found", id))
 		return
 	}
-	personIDs := s.idx.PersonsBySchema(id)
+	personIDs := s.load().idx.PersonsBySchema(id)
 	writeJSON(w, http.StatusOK, s.personRefs(personIDs))
 }
 
 func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.ff.Sources)
+	writeJSON(w, http.StatusOK, s.load().ff.Sources)
 }
 
 func (s *Server) handleSource(w http.ResponseWriter, r *http.Request) {
@@ -674,7 +674,7 @@ func (s *Server) handleSource(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	src, ok := s.idx.Sources[id]
+	src, ok := s.load().idx.Sources[id]
 	if !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("source %d not found", id))
 		return
@@ -688,15 +688,15 @@ func (s *Server) handleSourcePersons(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, ok := s.idx.Sources[id]; !ok {
+	if _, ok := s.load().idx.Sources[id]; !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("source %d not found", id))
 		return
 	}
 	// Find all persons that cite this source (person-level or event-level)
 	var refs []PersonRef
 	seen := make(map[uint32]bool)
-	for i := range s.ff.Persons {
-		p := &s.ff.Persons[i]
+	for i := range s.load().ff.Persons {
+		p := &s.load().ff.Persons[i]
 		found := false
 		for _, sc := range p.SourceCitations {
 			if sc.SourceID == id {
@@ -730,7 +730,7 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 	if personIDStr != "" {
 		pid := parseIntQuery(r, "person_id", 0)
 		var filtered []model.Note
-		for _, n := range s.ff.Notes {
+		for _, n := range s.load().ff.Notes {
 			if n.PersonID == pid {
 				filtered = append(filtered, n)
 			}
@@ -738,7 +738,7 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, filtered)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.ff.Notes)
+	writeJSON(w, http.StatusOK, s.load().ff.Notes)
 }
 
 func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
@@ -747,7 +747,7 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	n, ok := s.idx.Notes[id]
+	n, ok := s.load().idx.Notes[id]
 	if !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("note %d not found", id))
 		return
@@ -761,7 +761,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, []PersonRef{})
 		return
 	}
-	persons := s.idx.Search(query)
+	persons := s.load().idx.Search(query)
 	// Sort by name for consistent results
 	sort.Slice(persons, func(i, j int) bool {
 		return index.FormatName(persons[i]) < index.FormatName(persons[j])
