@@ -12,6 +12,8 @@ import (
 	_ "github.com/kedoco/reunion-explore/parser" // register v14 parser
 )
 
+var version = "dev"
+
 var (
 	ff  *model.FamilyFile
 	idx *Index
@@ -24,9 +26,10 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "reunion-explore <command> <bundle>",
-	Short: "Explore Reunion 14 family files",
-	Long:  "A CLI for parsing and exploring Reunion 14 genealogy bundles (.familyfile14).",
+	Use:     "reunion-explore <command> <bundle>",
+	Short:   "Explore Reunion 14 family files",
+	Long:    fmt.Sprintf("reunion-explore %s\nA CLI for parsing and exploring Reunion 14 genealogy bundles (.familyfile14).", version),
+	Version: version,
 }
 
 func init() {

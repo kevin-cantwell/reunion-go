@@ -58,6 +58,10 @@ The `serve` command starts an HTTP server with a REST API and embedded web UI.
 
 API endpoints are available under `/api/` — see `/api/openapi.json` for the full OpenAPI 3.1.0 spec.
 
+## Versioning
+
+Release tags use the format `vX.Y.Z-reunionN`, where `X.Y.Z` is the app's semver version and `N` indicates the Reunion format version supported (e.g. `v0.2.0-reunion14`).
+
 ## File Format
 
 Reunion 14 uses a proprietary, undocumented binary format. Leister Productions has never published a specification — a developer [noted on ReunionTalk](https://www.reuniontalk.com/forum/using-older-versions-of-reunion/9509-conflicted-file-from-dropbox) that *"viewing the contents of a Family File package was not something we intended users to do."* Everything below was reverse-engineered from the Reunion 14 demo's sample file and confirmed against the parser in this repo.

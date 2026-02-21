@@ -23,7 +23,7 @@ jobs:
       - name: Build binaries
         run: |
           VERSION="${GITHUB_REF#refs/tags/}"
-          LDFLAGS="-s -w"
+          LDFLAGS="-s -w -X main.version=${VERSION}"
           PKG="./cmd/reunion-explore"
           TARGETS=(
             "linux/amd64"
