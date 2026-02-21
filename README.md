@@ -4,10 +4,10 @@ A CLI and web server for parsing and exploring [Reunion 14](https://www.leisterp
 
 ## Install
 
-Download a prebuilt binary from [Releases](https://github.com/kevin-cantwell/reunion-explore/releases), or build from source:
+Download a prebuilt binary from [Releases](https://github.com/kedoco/reunion-explore/releases), or build from source:
 
 ```sh
-go install github.com/kevin-cantwell/reunion-explore/cmd/reunion-explore@latest
+go install github.com/kedoco/reunion-explore/cmd/reunion-explore@latest
 ```
 
 ## Usage

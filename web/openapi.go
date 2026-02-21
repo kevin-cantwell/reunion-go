@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kevin-cantwell/reunion-explore/model"
+	"github.com/kedoco/reunion-explore/model"
 )
 
 var (

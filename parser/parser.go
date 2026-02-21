@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	reunion "github.com/kevin-cantwell/reunion-explore"
-	"github.com/kevin-cantwell/reunion-explore/bundle"
-	"github.com/kevin-cantwell/reunion-explore/model"
-	"github.com/kevin-cantwell/reunion-explore/parser/cache"
-	"github.com/kevin-cantwell/reunion-explore/parser/familydata"
-	"github.com/kevin-cantwell/reunion-explore/parser/member"
-	"github.com/kevin-cantwell/reunion-explore/parser/notes"
+	reunion "github.com/kedoco/reunion-explore"
+	"github.com/kedoco/reunion-explore/bundle"
+	"github.com/kedoco/reunion-explore/model"
+	"github.com/kedoco/reunion-explore/parser/cache"
+	"github.com/kedoco/reunion-explore/parser/familydata"
+	"github.com/kedoco/reunion-explore/parser/member"
+	"github.com/kedoco/reunion-explore/parser/notes"
 )
 
 func init() {

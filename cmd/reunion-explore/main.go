@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	reunion "github.com/kevin-cantwell/reunion-explore"
-	"github.com/kevin-cantwell/reunion-explore/model"
-	_ "github.com/kevin-cantwell/reunion-explore/parser" // register v14 parser
+	reunion "github.com/kedoco/reunion-explore"
+	"github.com/kedoco/reunion-explore/model"
+	_ "github.com/kedoco/reunion-explore/parser" // register v14 parser
 )
 
 var (

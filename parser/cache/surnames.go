@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/kevin-cantwell/reunion-explore/model"
+	"github.com/kedoco/reunion-explore/model"
 )
 
 // ParseSurnames parses the surnames.cache file.

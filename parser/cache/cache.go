@@ -4,7 +4,7 @@ package cache
 import (
 	"fmt"
 
-	"github.com/kevin-cantwell/reunion-explore/internal/binutil"
+	"github.com/kedoco/reunion-explore/internal/binutil"
 )
 
 // CacheHeader represents the common header found in most cache files.

@@ -1,8 +1,8 @@
 package familydata
 
 import (
-	reunion "github.com/kevin-cantwell/reunion-explore"
-	"github.com/kevin-cantwell/reunion-explore/model"
+	reunion "github.com/kedoco/reunion-explore"
+	"github.com/kedoco/reunion-explore/model"
 )
 
 // ParseMedia parses a 0x20D4 media metadata record from familydata.

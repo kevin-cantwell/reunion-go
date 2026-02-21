@@ -1,9 +1,9 @@
 package familydata
 
 import (
-	"github.com/kevin-cantwell/reunion-explore/model"
+	"github.com/kedoco/reunion-explore/model"
 
-	reunion "github.com/kevin-cantwell/reunion-explore"
+	reunion "github.com/kedoco/reunion-explore"
 )
 
 // Tag constants for schema/event definition record fields.

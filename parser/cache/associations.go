@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kevin-cantwell/reunion-explore/model"
+	"github.com/kedoco/reunion-explore/model"
 )
 
 // ParseAssociations parses the associations.cache file.

@@ -1,9 +1,9 @@
 package member
 
 import (
-	"github.com/kevin-cantwell/reunion-explore/bundle"
-	"github.com/kevin-cantwell/reunion-explore/model"
-	"github.com/kevin-cantwell/reunion-explore/parser/changes"
+	"github.com/kedoco/reunion-explore/bundle"
+	"github.com/kedoco/reunion-explore/model"
+	"github.com/kedoco/reunion-explore/parser/changes"
 )
 
 // ParseMembers creates Member models from bundle member directories.

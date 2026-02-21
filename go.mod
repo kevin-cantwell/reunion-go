@@ -1,4 +1,4 @@
-module github.com/kevin-cantwell/reunion-explore
+module github.com/kedoco/reunion-explore
 
 go 1.25.7
 

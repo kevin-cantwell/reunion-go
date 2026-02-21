@@ -3,7 +3,7 @@ package notes
 import (
 	"strings"
 
-	"github.com/kevin-cantwell/reunion-explore/model"
+	"github.com/kedoco/reunion-explore/model"
 )
 
 const (

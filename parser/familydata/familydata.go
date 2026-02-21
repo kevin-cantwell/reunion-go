@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	reunion "github.com/kevin-cantwell/reunion-explore"
-	"github.com/kevin-cantwell/reunion-explore/model"
+	reunion "github.com/kedoco/reunion-explore"
+	"github.com/kedoco/reunion-explore/model"
 )
 
 // Result holds all data extracted from the familydata file.

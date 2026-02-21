@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kevin-cantwell/reunion-explore/internal/binutil"
-	"github.com/kevin-cantwell/reunion-explore/model"
+	"github.com/kedoco/reunion-explore/internal/binutil"
+	"github.com/kedoco/reunion-explore/model"
 )
 
 // ParseTimestamps parses the timestamps.cache file.

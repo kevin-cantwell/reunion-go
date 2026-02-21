@@ -9,8 +9,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/kevin-cantwell/reunion-explore/internal/binutil"
-	"github.com/kevin-cantwell/reunion-explore/model"
+	"github.com/kedoco/reunion-explore/internal/binutil"
+	"github.com/kedoco/reunion-explore/model"
 )
 
 // placeRefPattern matches [[pt:NNN]] place references in event data.

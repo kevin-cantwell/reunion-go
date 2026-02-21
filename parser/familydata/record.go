@@ -1,7 +1,7 @@
 package familydata
 
 import (
-	"github.com/kevin-cantwell/reunion-explore/internal/binutil"
+	"github.com/kedoco/reunion-explore/internal/binutil"
 )
 
 // RecordType identifies the type of a familydata record.

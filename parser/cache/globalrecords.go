@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kevin-cantwell/reunion-explore/model"
+	"github.com/kedoco/reunion-explore/model"
 )
 
 // ParseGlobalRecords parses the globalRecords.cache file.

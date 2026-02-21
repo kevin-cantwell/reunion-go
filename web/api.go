@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kevin-cantwell/reunion-explore/index"
-	"github.com/kevin-cantwell/reunion-explore/model"
+	"github.com/kedoco/reunion-explore/index"
+	"github.com/kedoco/reunion-explore/model"
 )
 
 // --- Response Types ---

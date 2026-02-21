@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	reunion "github.com/kevin-cantwell/reunion-explore"
+	reunion "github.com/kedoco/reunion-explore"
 )
 
 func TestParseFamily(t *testing.T) {

@@ -1,10 +1,10 @@
 package familydata
 
 import (
-	"github.com/kevin-cantwell/reunion-explore/internal/binutil"
-	"github.com/kevin-cantwell/reunion-explore/model"
+	"github.com/kedoco/reunion-explore/internal/binutil"
+	"github.com/kedoco/reunion-explore/model"
 
-	reunion "github.com/kevin-cantwell/reunion-explore"
+	reunion "github.com/kedoco/reunion-explore"
 )
 
 // Tag constants for family record fields.

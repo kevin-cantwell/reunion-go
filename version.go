@@ -3,7 +3,7 @@ package reunion
 import (
 	"fmt"
 
-	"github.com/kevin-cantwell/reunion-explore/model"
+	"github.com/kedoco/reunion-explore/model"
 )
 
 // Version identifies a Reunion file format version.
