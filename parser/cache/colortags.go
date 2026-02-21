@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kevin-cantwell/reunion-go/model"
+	"github.com/kevin-cantwell/reunion-explore/model"
 )
 
 // ParseColorTags parses the colortags.cache file.

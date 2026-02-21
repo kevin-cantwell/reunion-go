@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kevin-cantwell/reunion-go/index"
-	"github.com/kevin-cantwell/reunion-go/model"
+	"github.com/kevin-cantwell/reunion-explore/index"
+	"github.com/kevin-cantwell/reunion-explore/model"
 )
 
 // printJSON marshals v as indented JSON to stdout.

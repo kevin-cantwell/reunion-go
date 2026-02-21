@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/kevin-cantwell/reunion-go/model"
+	"github.com/kevin-cantwell/reunion-explore/model"
 )
 
 // noteFilePattern matches note filenames like "p1-1106-13.note"

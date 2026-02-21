@@ -1,8 +1,8 @@
 package familydata
 
 import (
-	reunion "github.com/kevin-cantwell/reunion-go"
-	"github.com/kevin-cantwell/reunion-go/model"
+	reunion "github.com/kevin-cantwell/reunion-explore"
+	"github.com/kevin-cantwell/reunion-explore/model"
 )
 
 // ParseSource parses a 0x20D0 source record from familydata.

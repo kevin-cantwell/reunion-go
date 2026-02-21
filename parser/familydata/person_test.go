@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"testing"
 
-	reunion "github.com/kevin-cantwell/reunion-go"
-	"github.com/kevin-cantwell/reunion-go/model"
+	reunion "github.com/kevin-cantwell/reunion-explore"
+	"github.com/kevin-cantwell/reunion-explore/model"
 )
 
 func TestParsePerson(t *testing.T) {

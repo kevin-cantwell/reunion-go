@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	reunion "github.com/kevin-cantwell/reunion-go"
-	"github.com/kevin-cantwell/reunion-go/web"
+	reunion "github.com/kevin-cantwell/reunion-explore"
+	"github.com/kevin-cantwell/reunion-explore/web"
 )
 
 var serveCmd = &cobra.Command{

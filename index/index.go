@@ -4,7 +4,7 @@ package index
 import (
 	"strings"
 
-	"github.com/kevin-cantwell/reunion-go/model"
+	"github.com/kevin-cantwell/reunion-explore/model"
 )
 
 // TreeEntry pairs a person with their generation depth.

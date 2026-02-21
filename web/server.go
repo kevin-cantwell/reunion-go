@@ -16,9 +16,9 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	reunion "github.com/kevin-cantwell/reunion-go"
-	"github.com/kevin-cantwell/reunion-go/index"
-	"github.com/kevin-cantwell/reunion-go/model"
+	reunion "github.com/kevin-cantwell/reunion-explore"
+	"github.com/kevin-cantwell/reunion-explore/index"
+	"github.com/kevin-cantwell/reunion-explore/model"
 )
 
 //go:embed static/*

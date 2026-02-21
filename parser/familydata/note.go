@@ -3,9 +3,9 @@ package familydata
 import (
 	"bytes"
 
-	reunion "github.com/kevin-cantwell/reunion-go"
-	"github.com/kevin-cantwell/reunion-go/model"
-	"github.com/kevin-cantwell/reunion-go/parser/notes"
+	reunion "github.com/kevin-cantwell/reunion-explore"
+	"github.com/kevin-cantwell/reunion-explore/model"
+	"github.com/kevin-cantwell/reunion-explore/parser/notes"
 )
 
 // ParseNote parses a 0x2104 inline note record from familydata.

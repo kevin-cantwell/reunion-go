@@ -1,8 +1,8 @@
 package familydata
 
 import (
-	"github.com/kevin-cantwell/reunion-go/internal/binutil"
-	"github.com/kevin-cantwell/reunion-go/model"
+	"github.com/kevin-cantwell/reunion-explore/internal/binutil"
+	"github.com/kevin-cantwell/reunion-explore/model"
 )
 
 // ParseHeader extracts the familydata file header.

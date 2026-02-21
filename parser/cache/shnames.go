@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kevin-cantwell/reunion-go/internal/binutil"
-	"github.com/kevin-cantwell/reunion-go/model"
+	"github.com/kevin-cantwell/reunion-explore/internal/binutil"
+	"github.com/kevin-cantwell/reunion-explore/model"
 )
 
 // ParseShNames parses the shNames.cache file (searchable full names).

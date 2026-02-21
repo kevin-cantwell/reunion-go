@@ -3,7 +3,7 @@ package familydata
 import (
 	"testing"
 
-	reunion "github.com/kevin-cantwell/reunion-go"
+	reunion "github.com/kevin-cantwell/reunion-explore"
 )
 
 func TestParseSchema(t *testing.T) {

@@ -1,13 +1,13 @@
-# reunion-go
+# reunion-explore
 
 A CLI and web server for parsing and exploring [Reunion 14](https://www.leisterpro.com) genealogy bundles (`.familyfile14`).
 
 ## Install
 
-Download a prebuilt binary from [Releases](https://github.com/kevin-cantwell/reunion-go/releases), or build from source:
+Download a prebuilt binary from [Releases](https://github.com/kevin-cantwell/reunion-explore/releases), or build from source:
 
 ```sh
-go install github.com/kevin-cantwell/reunion-go/cmd/reunion@latest
+go install github.com/kevin-cantwell/reunion-explore/cmd/reunion@latest
 ```
 
 ## Usage

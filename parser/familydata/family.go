@@ -1,10 +1,10 @@
 package familydata
 
 import (
-	"github.com/kevin-cantwell/reunion-go/internal/binutil"
-	"github.com/kevin-cantwell/reunion-go/model"
+	"github.com/kevin-cantwell/reunion-explore/internal/binutil"
+	"github.com/kevin-cantwell/reunion-explore/model"
 
-	reunion "github.com/kevin-cantwell/reunion-go"
+	reunion "github.com/kevin-cantwell/reunion-explore"
 )
 
 // Tag constants for family record fields.

@@ -3,7 +3,7 @@ package notes
 import (
 	"testing"
 
-	"github.com/kevin-cantwell/reunion-go/model"
+	"github.com/kevin-cantwell/reunion-explore/model"
 )
 
 func TestParseMarkup_PlainText(t *testing.T) {
