@@ -60,7 +60,7 @@ API endpoints are available under `/api/` — see `/api/openapi.json` for the fu
 
 ## Versioning
 
-Release tags use the format `vX.Y.Z-reunionN`, where `X.Y.Z` is the app's semver version and `N` indicates the Reunion format version supported (e.g. `v0.2.0-reunion14`).
+Release tags follow plain semver (`vX.Y.Z`). The supported Reunion format version is indicated in the `--version` output and release notes (e.g. "reunion14" means Reunion 14 compatibility).
 
 ## File Format
 
