@@ -7,13 +7,13 @@ A CLI and web server for parsing and exploring [Reunion 14](https://www.leisterp
 Download a prebuilt binary from [Releases](https://github.com/kevin-cantwell/reunion-explore/releases), or build from source:
 
 ```sh
-go install github.com/kevin-cantwell/reunion-explore/cmd/reunion@latest
+go install github.com/kevin-cantwell/reunion-explore/cmd/reunion-explore@latest
 ```
 
 ## Usage
 
 ```
-reunion <command> <bundle>
+reunion-explore <command> <bundle>
 ```
 
 All commands accept a `-j` / `--json` flag for JSON output.
@@ -40,16 +40,16 @@ All commands accept a `-j` / `--json` flag for JSON output.
 
 ```sh
 # Show file statistics
-reunion stats ~/Documents/MyFamily.familyfile14
+reunion-explore stats ~/Documents/MyFamily.familyfile14
 
 # Search for a person
-reunion search ~/Documents/MyFamily.familyfile14 "Smith"
+reunion-explore search ~/Documents/MyFamily.familyfile14 "Smith"
 
 # View ancestors up to 5 generations
-reunion ancestors ~/Documents/MyFamily.familyfile14 42 -g 5
+reunion-explore ancestors ~/Documents/MyFamily.familyfile14 42 -g 5
 
 # Start the web UI
-reunion serve ~/Documents/MyFamily.familyfile14 -a :3000
+reunion-explore serve ~/Documents/MyFamily.familyfile14 -a :3000
 ```
 
 ### Web Server

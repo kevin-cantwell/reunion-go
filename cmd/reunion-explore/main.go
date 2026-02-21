@@ -24,7 +24,7 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "reunion <command> <bundle>",
+	Use:   "reunion-explore <command> <bundle>",
 	Short: "Explore Reunion 14 family files",
 	Long:  "A CLI for parsing and exploring Reunion 14 genealogy bundles (.familyfile14).",
 }

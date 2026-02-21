@@ -24,7 +24,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF#refs/tags/}"
           LDFLAGS="-s -w"
-          PKG="./cmd/reunion"
+          PKG="./cmd/reunion-explore"
           TARGETS=(
             "linux/amd64"
             "linux/arm64"
@@ -37,7 +37,7 @@ jobs:
           for target in "${TARGETS[@]}"; do
             GOOS="${target%/*}"
             GOARCH="${target#*/}"
-            output="dist/reunion-${VERSION}-${GOOS}-${GOARCH}"
+            output="dist/reunion-explore-${VERSION}-${GOOS}-${GOARCH}"
             if [ "$GOOS" = "windows" ]; then
               output="${output}.exe"
             fi
